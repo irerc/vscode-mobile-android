@@ -39,7 +39,7 @@
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**为什么需要 PRoot**：微软 serve-web 的 `node` 是 Linux glibc 构建，Android 的 bionic 链接器无法直接加载它。所以随包带一个 50MB 的 Ubuntu 精简根（只保留 glibc、libstdc++、bash 与核心工具），由 PRoot 做系统调用翻译，让 Linux node 以为自己在普通 Linux 上运行。
+**为什么需要 PRoot**：微软 serve-web 的 `node` 是 Linux glibc 构建，Android 的 bionic 链接器无法直接加载它。所以随包带一个 21MB（压缩）的 Ubuntu 精简根（只保留 glibc、libstdc++、bash 与核心工具），由 PRoot 做系统调用翻译，让 Linux node 以为自己在普通 Linux 上运行。
 
 **为什么 proot 放在 nativeLibraryDir**：Android 10+ 对 app 数据目录（`filesDir`）施加 `noexec`，从那里 `exec` 会被 SELinux 拒绝。原生库目录不受此限制，因此 `proot`、`proot` 的静态 loader、`libtalloc`、`libandroid-shmem` 都以 `lib*.so` 形式放进 `lib/arm64-v8a/`，并在 `libproot.so` 上写入 `$ORIGIN` RUNPATH 让 bionic 找到同目录依赖。代价是 `targetSdk` 必须降到 28（侧载分发不受影响）。
 
@@ -84,7 +84,7 @@ bash "/root/VS Code移植/android-app/build2.sh"
 
 | 文件 | 大小 | 内容 |
 |---|---|---|
-| `rootfs.tar.gz` | 20,848,923 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash） |
+| `rootfs.tar.gz` | 20,955,828 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh） |
 | `vscode.tar.gz` | 88,452,362 B | 裁剪后的 serve-web 树（node、node_modules、94 个内置扩展、out） |
 | `usr.tar.gz` | 136,008 B | PRoot 备用副本（实际运行走 nativeLibraryDir） |
 | `omni.ja` | 15,141,515 B | GeckoView 资源包 |
@@ -93,9 +93,9 @@ bash "/root/VS Code移植/android-app/build2.sh"
 
 - `apksigner verify` → 通过（SHA-256 `1d571632…c47416346`）。
 - `aapt2 dump badging` → `package=dev.dsh.vscodemobile`，`minSdk=26`，`targetSdk=28`，`extractNativeLibs=true`。
-- APK 内含 `classes.dex`（26KB）、`resources.arsc`、`assets/omni.ja`、4 个 `assets/runtime/*`、16 个 `lib/arm64-v8a/*.so`（含 `libxul.so` 154MB、`libproot.so`、`libtalloc.so`、`libprootloader.so`）。
+- APK 内含 `classes.dex`（26KB）、`resources.arsc`、`assets/omni.ja`、3 个 `assets/runtime/*.tar.gz`、16 个 `lib/arm64-v8a/*.so`（含 `libxul.so` 154MB、`libproot.so`、`libtalloc.so`、`libprootloader.so`）。
 - **端到端证明**：用 APK 内同一份 `rootfs.tar.gz` + `vscode.tar.gz` 解包后，以 rootfs 自带 glibc loader 直接运行 serve-web，4 秒内返回 HTTP 200，返回页面含 7 处 `workbench`，`workbench.js` / `workbench.css` / `nls.messages.js` / 图标 / manifest 全部 200，日志出现 `Extension host agent started.`。
-- `TarGz.java` 解包正确性：对 `rootfs.tar.gz` 解出 1165 项、对 `vscode.tar.gz` 解出 3490 文件 + 829 目录，与系统 `tar` 结果完全一致，符号链接与可执行位均正确。
+- `TarGz.java` 解包正确性：对 `rootfs.tar.gz` 解出 1290 项、对 `vscode.tar.gz` 解出 3490 文件 + 829 目录，与系统 `tar` 结果完全一致，符号链接与可执行位均正确。
 
 ## 七、待真机验收
 
