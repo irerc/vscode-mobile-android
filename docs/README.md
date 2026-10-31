@@ -6,8 +6,9 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile.apk` | 199,006,108 字节（约 190 MB） |
-| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile.apk` | 同上，MD5 `7eabc152092e0be6cc190fc4a9b0485e` |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile.apk` | 199,112,604 字节（约 190 MB），MD5 `5d94aa6b8c955334a205d3047fc28daf` |
+| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile.apk` | 同上，MD5 `5d94aa6b8c955334a205d3047fc28daf` |
+| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.0` 附件 `vscode-mobile.apk` | 同上 |
 | APK 源码工程 | `android-app/` | — |
 | 一键构建脚本 | `android-app/build2.sh` | — |
 | 已知问题清单 | `docs/known-issues.md` | — |
