@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.dsh.vscodemobile">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="28" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <application android:label="VS Code Mobile" android:theme="@style/GeckoViewTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:largeHeap="true" android:extractNativeLibs="true" android:zygotePreloadName="org.mozilla.gecko.process.ZygotePreload">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density|fontScale" android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="vscodemobile" android:host="open" />
+            </intent-filter>
+        </activity>
+        <service android:name="org.mozilla.gecko.crashhelper.CrashHelper" android:exported="false" android:process=":org.mozilla.gecko.crashhelper.CrashHelper" />
+        <service android:name="org.mozilla.gecko.media.MediaManager" android:exported="false" android:process=":org.mozilla.gecko.media.MediaManager" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gmplugin" android:exported="false" android:process=":gmplugin" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$socket" android:exported="false" android:process=":socket" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gpu" android:exported="false" android:process=":gpu" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$rdd" android:exported="false" android:process=":rdd" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$utility" android:exported="false" android:process=":utility" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$zygoteTab" android:exported="false" android:process=":gecko" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab0" android:exported="false" android:process=":tab0" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab0" android:exported="false" android:process=":itab0" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab1" android:exported="false" android:process=":tab1" />
+        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab1" android:exported="false" android:process=":itab1" />
+        <provider android:name="org.mozilla.gecko.GeckoClipboardContentProvider" android:authorities="dev.dsh.vscodemobile.clipboard" android:exported="false" android:grantUriPermissions="true" />
+    </application>
+</manifest>

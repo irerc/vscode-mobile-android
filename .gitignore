@@ -1,0 +1,16 @@
+# 构建产物与超大二进制（体积原因不入库，按 docs/README.md 复现）
+/android-app/jni/
+/android-app/assets/
+/android-app/libs/
+/android-app/keystore/
+/dist/
+/vscode/
+/data/
+/logs/
+/run/
+*.apk
+*.idsig
+*.tar.gz
+*.jks
+config.env
+config.env.bak
