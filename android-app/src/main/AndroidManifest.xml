@@ -1,39 +1,713 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.dsh.vscodemobile">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+
+    package="dev.dsh.vscodemobile" >
+
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="28" />
-    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.location" android:required="false" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <application android:label="VS Code Mobile" android:theme="@style/GeckoViewTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:largeHeap="true" android:extractNativeLibs="true" android:zygotePreloadName="org.mozilla.gecko.process.ZygotePreload">
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density|fontScale" android:windowSoftInputMode="adjustResize">
+
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.audio.low_latency"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+    <uses-feature
+        android:glEsVersion="0x00020000"
+        android:required="true" />
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+
+            <category android:name="android.intent.category.DEFAULT" />
+
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
+    <application
+        android:zygotePreloadName="org.mozilla.gecko.process.ZygotePreload"
+        android:label="VS Code Mobile"
+        android:theme="@style/GeckoViewTheme"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:extractNativeLibs="true">
+
+        <activity android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density|fontScale"
+            android:windowSoftInputMode="adjustResize">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="vscodemobile" android:host="open" />
             </intent-filter>
+
         </activity>
-        <service android:name="org.mozilla.gecko.crashhelper.CrashHelper" android:exported="false" android:process=":org.mozilla.gecko.crashhelper.CrashHelper" />
-        <service android:name="org.mozilla.gecko.media.MediaManager" android:exported="false" android:process=":org.mozilla.gecko.media.MediaManager" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gmplugin" android:exported="false" android:process=":gmplugin" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$socket" android:exported="false" android:process=":socket" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gpu" android:exported="false" android:process=":gpu" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$rdd" android:exported="false" android:process=":rdd" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$utility" android:exported="false" android:process=":utility" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$zygoteTab" android:exported="false" android:process=":gecko" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab0" android:exported="false" android:process=":tab0" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab0" android:exported="false" android:process=":itab0" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab1" android:exported="false" android:process=":tab1" />
-        <service android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab1" android:exported="false" android:process=":itab1" />
-        <provider android:name="org.mozilla.gecko.GeckoClipboardContentProvider" android:authorities="dev.dsh.vscodemobile.clipboard" android:exported="false" android:grantUriPermissions="true" />
+        <service
+            android:name="org.mozilla.gecko.crashhelper.CrashHelper"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":crashhelper_disable_art_image_"
+            android:stopWithTask="true" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.media.MediaManager"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":media" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gmplugin"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":gmplugin_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$socket"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":socket_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$gpu"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":gpu_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$rdd"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":rdd_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$utility"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":utility_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$ipdlunittest"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":ipdlunittest_disable_art_image_" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab0"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_0" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab0"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_0" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab1"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_1" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab1"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_1" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab2"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_2" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab2"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_2" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab3"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_3" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab3"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_3" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab4"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_4" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab4"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_4" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab5"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_5" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab5"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_5" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab6"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_6" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab6"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_6" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab7"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_7" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab7"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_7" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab8"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_8" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab8"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_8" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab9"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_9" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab9"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_9" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab10"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_10" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab10"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_10" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab11"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_11" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab11"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_11" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab12"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_12" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab12"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_12" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab13"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_13" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab13"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_13" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab14"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_14" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab14"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_14" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab15"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_15" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab15"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_15" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab16"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_16" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab16"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_16" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab17"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_17" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab17"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_17" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab18"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_18" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab18"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_18" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab19"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_19" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab19"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_19" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab20"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_20" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab20"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_20" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab21"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_21" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab21"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_21" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab22"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_22" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab22"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_22" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab23"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_23" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab23"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_23" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab24"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_24" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab24"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_24" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab25"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_25" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab25"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_25" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab26"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_26" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab26"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_26" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab27"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_27" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab27"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_27" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab28"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_28" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab28"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_28" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab29"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_29" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab29"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_29" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab30"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_30" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab30"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_30" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab31"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_31" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab31"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_31" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab32"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_32" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab32"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_32" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab33"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_33" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab33"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_33" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab34"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_34" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab34"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_34" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab35"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_35" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab35"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_35" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab36"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_36" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab36"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_36" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab37"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_37" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab37"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_37" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab38"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_38" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab38"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_38" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$tab39"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="false"
+            android:process=":sandboxed_tab_disable_art_image_39" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$isolatedTab39"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":isolatedTab_disable_art_image_39" >
+        </service>
+        <service
+            android:name="org.mozilla.gecko.process.GeckoChildProcessServices$zygoteTab"
+            android:enabled="true"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":zygoteTab_disable_art_image_"
+            android:useAppZygote="true" >
+        </service>
+
+        <provider
+            android:name="org.mozilla.gecko.GeckoClipboardContentProvider"
+            android:authorities="dev.dsh.vscodemobile.clipboard"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+        </provider>
     </application>
+
 </manifest>

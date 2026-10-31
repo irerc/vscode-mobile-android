@@ -9,7 +9,7 @@
 
 ## 直接下载
 
-**[vscode-mobile.apk](https://github.com/irerc/vscode-mobile-android/releases/download/v1.0.0/vscode-mobile.apk)** · 199,112,604 字节（约 190 MB） · MD5 `5d94aa6b8c955334a205d3047fc28daf`
+**[vscode-mobile.apk](https://github.com/irerc/vscode-mobile-android/releases/download/v1.0.0/vscode-mobile.apk)** · 199,116,700 字节（约 190 MB） · MD5 `5af63fd82c8304255b44f489e7fe8362`
 
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 
