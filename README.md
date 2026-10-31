@@ -2,14 +2,14 @@
 
 把完整的桌面版 **VS Code** 装进一个安卓 APK：**即装即用，不依赖手机上的浏览器、不依赖容器、不需要联网**。
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/release-v1.0.1-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.1)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.144.0-007ACC)](https://code.visualstudio.com/)
 [![GeckoView](https://img.shields.io/badge/GeckoView-159-orange)](https://mozilla.github.io/geckoview/)
 [![Android](https://img.shields.io/badge/Android-8.0%2B%20(arm64)-green)]()
 
 ## 直接下载
 
-**[vscode-mobile.apk](https://github.com/irerc/vscode-mobile-android/releases/download/v1.0.0/vscode-mobile.apk)** · 199,116,700 字节（约 190 MB） · MD5 `5af63fd82c8304255b44f489e7fe8362`
+**[vscode-mobile.apk](https://github.com/irerc/vscode-mobile-android/releases/download/v1.0.1/vscode-mobile.apk)** · 199,116,700 字节（约 190 MB） · MD5 `5af63fd82c8304255b44f489e7fe8362`
 
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 

@@ -14,6 +14,7 @@
 | 6 | `GeckoSession.setSettings()` / `canGoBack()` 找不到符号 | 该版本 API 是构造器传 `GeckoSessionSettings`，回退能力靠 `NavigationDelegate.onCanGoBack` | 已按真实 API 改写 |
 | 7 | `dpkg-deb -x` 解 Termux 包报 `Cannot change mode` | 包内路径前缀与本地不一致，chmod 失败但文件已解出 | 忽略该噪声，校验文件存在即可 |
 | 8 | Termux 仓库 `Packages.xz` 全面 404 | 仓库只发布 `Packages.gz` | 改用 `Packages.gz` 解析真实文件名 |
+| 9 | 真机上 GeckoView 内容进程起不来：白屏或首启即崩，logcat 报 `Unable to start service ... GeckoChildProcessServices$tab0` | v1.0.0 的清单是手写的，只声明了 12 个 GeckoView 服务，漏掉 AAR 中其余 77 个（`tab0..39`、`isolatedTab0..39`、`socket/gpu/rdd/utility` 等），且缺 `isolatedProcess="true"`、`useAppZygote`、``、`glEsVersion` | v1.0.1 改为由 `geckoview-arm64-v8a.aar` 的清单生成：89 个 service、41 个 `isolatedProcess="true"`、1 个 `useAppZygote`、`` 与 `uses-feature glEsVersion 0x00020000` 全部补齐，并用 `aapt2 dump xmltree` 在打包后的 APK 内逐项复核 |
 
 ## 二、架构性限制（不可绕过，需知悉）
 
