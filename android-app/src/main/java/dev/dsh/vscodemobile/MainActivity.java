@@ -33,6 +33,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -77,15 +80,116 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        baseUrl = prefs().getString(KEY_URL, SERVER_URL);
-        buildUi();
-        createGecko();
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread th, Throwable e) {
+                reportFatal("uncaught/" + th.getName(), e);
+                try {
+                    Thread.sleep(900);
+                } catch (Throwable ignored) {
+                }
+                android.os.Process.killProcess(android.os.Process.myPid());
+            }
+        });
+        try {
+            baseUrl = prefs().getString(KEY_URL, SERVER_URL);
+            buildUi();
+        } catch (Throwable t) {
+            reportFatal("buildUi", t);
+            return;
+        }
+        // Show the splash first, then bring up GeckoView. GeckoRuntime.create loads
+        // libxul and may throw; doing that inside onCreate killed the process
+        // before the first frame was drawn, so the user saw nothing at all.
+        ui.post(new Runnable() {
+            @Override
+            public void run() {
+                uiStatus("\u6B63\u5728\u521D\u59CB\u5316 GeckoView\u2026");
+                try {
+                    createGecko();
+                } catch (Throwable t) {
+                    reportFatal("createGecko", t);
+                    return;
+                }
+                uiStatus("\u6B63\u5728\u51C6\u5907\u8FD0\u884C\u65F6\u2026");
+            }
+        });
         new Thread(new Runnable() {
             @Override
             public void run() {
+                try {
+                    Thread.sleep(500);
+                } catch (Throwable ignored) {
+                }
                 bootstrap();
             }
         }, "bootstrap").start();
+    }
+
+    private void reportFatal(final String where, Throwable t) {
+        StringWriter sw = new StringWriter();
+        sw.write("[" + where + "]");
+        sw.write("\n");
+        t.printStackTrace(new PrintWriter(sw));
+        final String trace = sw.toString();
+        Log.e(TAG, "FATAL " + where, t);
+        writeLog("FATAL " + where + "\n" + trace + "\n");
+        Runnable show = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    TextView tv = new TextView(MainActivity.this);
+                    tv.setText("\u542F\u52A8\u5931\u8D25 (" + where + ")" + "\n" + "\n" + trace);
+                    tv.setTextColor(Color.rgb(255, 190, 190));
+                    tv.setTextSize(10);
+                    tv.setBackgroundColor(Color.rgb(16, 16, 16));
+                    tv.setPadding(dp(10), dp(10), dp(10), dp(10));
+                    tv.setTextIsSelectable(true);
+                    setContentView(tv);
+                } catch (Throwable ignored) {
+                }
+            }
+        };
+        try {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                show.run();
+            } else {
+                ui.post(show);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void writeLog(String text) {
+        byte[] bytes;
+        try {
+            bytes = text.getBytes("UTF-8");
+        } catch (Throwable t) {
+            return;
+        }
+        try {
+            FileOutputStream fo = new FileOutputStream(new File(getFilesDir(), "crash.log"), true);
+            try {
+                fo.write(bytes);
+                fo.flush();
+            } finally {
+                fo.close();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            File ext = getExternalFilesDir(null);
+            if (ext != null) {
+                FileOutputStream fo2 = new FileOutputStream(new File(ext, "crash.log"), true);
+                try {
+                    fo2.write(bytes);
+                    fo2.flush();
+                } finally {
+                    fo2.close();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private SharedPreferences prefs() {
