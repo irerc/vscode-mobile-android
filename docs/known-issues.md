@@ -15,6 +15,10 @@
 | 7 | `dpkg-deb -x` 解 Termux 包报 `Cannot change mode` | 包内路径前缀与本地不一致，chmod 失败但文件已解出 | 忽略该噪声，校验文件存在即可 |
 | 8 | Termux 仓库 `Packages.xz` 全面 404 | 仓库只发布 `Packages.gz` | 改用 `Packages.gz` 解析真实文件名 |
 | 9 | 真机上 GeckoView 内容进程起不来：白屏或首启即崩，logcat 报 `Unable to start service ... GeckoChildProcessServices$tab0` | v1.0.0 的清单是手写的，只声明了 12 个 GeckoView 服务，漏掉 AAR 中其余 77 个（`tab0..39`、`isolatedTab0..39`、`socket/gpu/rdd/utility` 等），且缺 `isolatedProcess="true"`、`useAppZygote`、``、`glEsVersion` | v1.0.1 改为由 `geckoview-arm64-v8a.aar` 的清单生成：89 个 service、41 个 `isolatedProcess="true"`、1 个 `useAppZygote`、`` 与 `uses-feature glEsVersion 0x00020000` 全部补齐，并用 `aapt2 dump xmltree` 在打包后的 APK 内逐项复核 |
+| 10 | G/H/J 装上后启动即闪退，无任何界面 | **d8 只拿到 `geckoview-classes.jar` + 3 个 app class**，androidx 只进了 javac 的 classpath 却没进 dex；`buildUi()` 在 MainActivity.java:254 触发 `NoClassDefFoundError: androidx/core/view/OnApplyWindowInsetsListener` | build9.sh 把整个依赖闭包（`runtime-deps-clean` 15 个 jar）一起喂给 d8；K 的 dex 中该类有 9 处命中 |
+| 11 | build8.sh 的 d8 崩溃：`java.lang.NullPointerException: Cannot invoke "String.length()" because "<parameter1>" is null`，包装为 `com.android.tools.r8.CompilationFailedException` | 触发文件 `androidx-core-1.19.1.jar:android/support/v4/os/ResultReceiver$1.class`；build-tools 自带 `D8 8.2.2-dev` 的代码生成缺陷 | 双重规避：改用 `cmdline-tools/latest/lib/r8.jar`（`D8 8.2.33`），并从 androidx-core 中剥掉 `android/support/*`（GeckoView 不引用） |
+| 12 | d8 报 "defined multiple times" | `runtime-deps/` 里 `androidx.core-core-1.19.1.jar`、`androidx.annotation-annotation-1.11.0.jar` 与无 `core` 前缀的同名包**字节完全相同** | `tools/sanitize_deps.py` 用 `DUPS` 集合排除重复件，生成 `runtime-deps-clean/`；构建脚本只读该目录 |
+| 13 | STORED 方式打包的 178MB / 303MB APK 安装失败（「签名校验不通过，目标系统版本过高」） | `.so` 未压缩导致安装器体积/校验上限被击穿 | 改为 DEFLATE（`zip -9` 压 dex+so，`zip -0` 仅用于 assets），200MB 级可正常安装；实测上限约 178MB（STORED） |
 
 ## 二、架构性限制（不可绕过，需知悉）
 

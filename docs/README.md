@@ -6,11 +6,11 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile.apk` | 199,116,700 字节（约 190 MB），MD5 `5af63fd82c8304255b44f489e7fe8362` |
-| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile.apk` | 同上，MD5 `5af63fd82c8304255b44f489e7fe8362` |
-| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.1` 附件 `vscode-mobile.apk` | 同上 |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile.apk` | 203,265,948 字节（约 194 MB），MD5 `064b3cc338d42dee1a815e67bad21fa3`（v1.0.5-k / versionCode 19） |
+| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-K.apk` | 同上，MD5 `064b3cc338d42dee1a815e67bad21fa3` |
+| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.5-k` 附件 `vscode-mobile.apk` | 同上 |
 | APK 源码工程 | `android-app/` | — |
-| 一键构建脚本 | `android-app/build2.sh` | — |
+| 一键构建脚本 | `android-app/build9.sh` | — |
 | 已知问题清单 | `docs/known-issues.md` | — |
 
 **这个 APK 是完全自包含的**：VS Code 服务端、Ubuntu 用户态、PRoot 执行器、GeckoView 浏览器内核全部打进包里。安装后不依赖容器、不依赖局域网、不依赖手机上任何已有浏览器，飞行模式下也能启动。
