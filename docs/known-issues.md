@@ -19,6 +19,7 @@
 | 11 | build8.sh 的 d8 崩溃：`java.lang.NullPointerException: Cannot invoke "String.length()" because "<parameter1>" is null`，包装为 `com.android.tools.r8.CompilationFailedException` | 触发文件 `androidx-core-1.19.1.jar:android/support/v4/os/ResultReceiver$1.class`；build-tools 自带 `D8 8.2.2-dev` 的代码生成缺陷 | 双重规避：改用 `cmdline-tools/latest/lib/r8.jar`（`D8 8.2.33`），并从 androidx-core 中剥掉 `android/support/*`（GeckoView 不引用） |
 | 12 | d8 报 "defined multiple times" | `runtime-deps/` 里 `androidx.core-core-1.19.1.jar`、`androidx.annotation-annotation-1.11.0.jar` 与无 `core` 前缀的同名包**字节完全相同** | `tools/sanitize_deps.py` 用 `DUPS` 集合排除重复件，生成 `runtime-deps-clean/`；构建脚本只读该目录 |
 | 13 | STORED 方式打包的 178MB / 303MB APK 安装失败（「签名校验不通过，目标系统版本过高」） | `.so` 未压缩导致安装器体积/校验上限被击穿 | 改为 DEFLATE（`zip -9` 压 dex+so，`zip -0` 仅用于 assets），200MB 级可正常安装；实测上限约 178MB（STORED） |
+| 14 | K（v1.0.5-k）打包后的 dex 里仍有 33 个被引用的 androidx 类型没有定义 | 三个独立原因：① `androidx-annotation-1.11.0.jar`、`androidx-collection-1.6.0.jar`、`androidx-lifecycle-common-2.11.0.jar` 是 KMP 的 metadata-only 包（0 个 `.class`，只有 `commonMain/default/linkdata/*.knm`），对 d8 零贡献；② lifecycle-runtime / startup-runtime / tracing / versionedparcelable 从未进闭包；③ 任何 androidx jar 都不发 `R$*`，而 `androidx.core` 字节码直接读 `attr/id/styleable` 常量类 | L（v1.0.6-l）：metadata 包换成真 JVM 产物（`annotation-jvm`/`collection-jvm`/`lifecycle-common-jvm`，版本不变），补齐 4 个传递依赖，按 AAR `R.txt` 合成 `androidx-core-R.jar`（208 个 int + 7 个 int[]）。DEPJARS 增至 20 个；d8 后逐类审计 33/33 命中、0 缺失 |
 
 ## 二、架构性限制（不可绕过，需知悉）
 
@@ -43,6 +44,7 @@
 | DSHA 无障碍 | `ACCESSIBILITY_UNAVAILABLE`，无法自动点击安装界面，安装需用户手动确认 |
 | 工具层字符处理 | 写入含 `` `&` 或完整 URL 字面量的文本会被截断，Java 源码统一用占位符脚本生成 |
 | 容器 seccomp | `chroot` 仅首次可用，之后 `Function not implemented`；改用 loader 直跑 |
+| 依赖校验 | jar 必须验证确实含 `.class`（`unzip -Z1 x.jar | grep -c "\.class$"`），0 个即为 metadata-only 包，不能喂给 d8 |
 
 ## 四、待真机验证项
 
