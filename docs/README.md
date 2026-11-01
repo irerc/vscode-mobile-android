@@ -6,11 +6,11 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile.apk` | 203,265,948 字节（约 194 MB），MD5 `064b3cc338d42dee1a815e67bad21fa3`（v1.0.5-k / versionCode 19） |
-| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-K.apk` | 同上，MD5 `064b3cc338d42dee1a815e67bad21fa3` |
-| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.5-k` 附件 `vscode-mobile.apk` | 同上 |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 203,548,630 字节（约 194 MB），MD5 `878f74320e3dbd4eb6da8da953cae306`（v1.0.6-l / versionCode 20） |
+| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 同上，MD5 `878f74320e3dbd4eb6da8da953cae306` |
+| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.6-l` 附件 `vscode-mobile.apk` | 同上 |
 | APK 源码工程 | `android-app/` | — |
-| 一键构建脚本 | `android-app/build9.sh` | — |
+| 一键构建脚本 | `android-app/build10.sh` | — |
 | 已知问题清单 | `docs/known-issues.md` | — |
 
 **这个 APK 是完全自包含的**：VS Code 服务端、Ubuntu 用户态、PRoot 执行器、GeckoView 浏览器内核全部打进包里。安装后不依赖容器、不依赖局域网、不依赖手机上任何已有浏览器，飞行模式下也能启动。
@@ -59,7 +59,7 @@
 | 编辑器（语法高亮 / 多光标 / 查找替换） | ✅ | Monaco，桌面级 |
 | 文件资源管理器、新建/重命名/删除 | ✅ | 走 rootfs 内真实文件系统，默认工作区 `/root/workspace` |
 | 集成终端 | ✅ | rootfs 内 `/bin/bash`，可运行 Linux 命令 |
-| 源代码管理（Git） | ✅ | 需在终端内 `apt` 安装 git 并配置凭据 |
+| 源代码管理（Git） | ⚠️ | rootfs 未预装 git：需在终端内联网 `apt install git` 后配置凭据，离线状态下不可用 |
 | 扩展市场 | ✅ | 联网时从 Marketplace / Open VSX 安装 |
 | 调试（Node/Python 等） | ✅ | 依赖对应 debug adapter，由扩展提供 |
 | 任务 / 输出 / 问题面板 | ✅ | — |
@@ -72,7 +72,7 @@
 ## 五、构建方法（复现）
 
 ```bash
-bash "/root/VS Code移植/android-app/build2.sh"
+bash "/root/VS Code移植/android-app/build10.sh"
 ```
 
 流水线：`aapt2 compile → aapt2 link → javac（JDK17，-source 8）→ d8 → 打包 so/assets → zipalign → apksigner`。
