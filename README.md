@@ -2,14 +2,16 @@
 
 把完整的桌面版 **VS Code** 装进一个安卓 APK：**即装即用，不依赖手机上的浏览器、不依赖容器、不需要联网**。
 
-[![Release](https://img.shields.io/badge/release-v1.0.6--l-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.6-l)
+[![Release](https://img.shields.io/badge/release-v1.0.10--l-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.10-l)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.144.0-007ACC)](https://code.visualstudio.com/)
 [![GeckoView](https://img.shields.io/badge/GeckoView-159-orange)](https://mozilla.github.io/geckoview/)
 [![Android](https://img.shields.io/badge/Android-8.0%2B%20(arm64)-green)]()
 
 ## 直接下载
 
-**[vscode-mobile.apk](https://github.com/irerc/vscode-mobile-android/releases/download/v1.0.6-l/vscode-mobile.apk)** · 203,548,630 字节（约 194 MB） · MD5 `878f74320e3dbd4eb6da8da953cae306` · versionCode 20 / `1.0.6-l`
+**vscode-mobile.apk** · 205,642,187 字节（约 196 MB） · MD5 `a31201687daca7225f88825d3d02e150` · versionCode 24 / `1.0.10-l`
+
+本版修复了两个致命的启动崩溃：dex 缺 Kotlin 运行时（`NoClassDefFoundError: kotlin/jvm/internal/Intrinsics`）与库 `R$*` 常量类缺失。详见 `docs/known-issues.md` 第 15–18 条。
 
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 
@@ -47,7 +49,8 @@
 无需 Gradle，纯 `aapt2 + javac + d8 + zipalign + apksigner` 流水线：
 
 ```bash
-bash android-app/build10.sh
+bash android-app/tools/fetch_deps.sh   # 重建 libs/（gitignore，约 1 分钟）
+bash android-app/build10.sh            # 产物 dist/vscode-mobile-L.apk
 ```
 
 需要：Android SDK build-tools 34.0.0（aarch64 版 `aapt2`/`zipalign`）、JDK 17、`android.jar`（API 34）、GeckoView AAR 解出的 `libs/geckoview-classes.jar` 与 `jni/arm64-v8a/*.so`。

@@ -53,7 +53,6 @@ DEPJARS=(
  "$DEPS/androidx-startup-runtime-1.1.1.jar"
  "$DEPS/androidx-tracing-1.2.0.jar"
  "$DEPS/androidx-versionedparcelable-1.1.1.jar"
- "$DEPS/androidx-core-R.jar"
   "$DEPS/androidx.annotation-annotation-experimental-1.6.0.jar"
   "$DEPS/androidx.lifecycle-lifecycle-process-2.11.0.jar"
   "$DEPS/androidx.media3-media3-common-1.11.1.jar"
@@ -66,11 +65,61 @@ DEPJARS=(
   "$DEPS/guava-33.4.0-android.jar"
   "$DEPS/snakeyaml-2.2.jar"
 )
-for j in "${DEPJARS[@]}"; do
+
+# Kotlin runtime. kotlin-stdlib version matches the one GeckoView's POM declares
+# (2.4.20); coroutines matches what androidx 1.19 / lifecycle 2.11 use. Both were
+# missing from the dex, which is why the v1.0.6-l build died on the device with
+#   NoClassDefFoundError: kotlin/jvm/internal/Intrinsics
+# at androidx.collection.SimpleArrayMap.put(SimpleArrayMap.kt:397)
+# <- GeckoBundle.putString <- GeckoSessionSettings.<init> <- createGecko.
+# R8 8.2.33 cannot parse kotlin 2.x @Metadata and prints Info/Warning lines for
+# it, but the dex is still produced correctly; do not treat those as errors.
+KDIR="$APP_DIR/libs/kotlin"
+KOTLIN_JARS=(
+  "$KDIR/annotations-23.0.0.jar"
+  "$KDIR/kotlin-stdlib-2.4.20.jar"
+  "$KDIR/kotlinx-coroutines-core-jvm-1.10.2.jar"
+  "$KDIR/kotlinx-coroutines-android-1.10.2.jar"
+)
+
+# Second closure gap. R8's "Missing class" report on the L dex showed that the
+# first closure still omitted transitive artifacts of media3 / play-services-fido
+# / guava (e.g. androidx.media3.extractor.*, com.google.android.gms.common.*).
+# Each of those is a real code reference, i.e. another latent NoClassDefFoundError
+# exactly like the kotlin one. libs/closure-extra/ holds the jars extracted from
+# the corresponding AARs (classes.jar) plus the plain jars from Maven Central.
+XD=$APP_DIR/libs/closure-extra
+EXTRA_JARS=(
+  "$XD/media3-extractor-1.11.1.jar"
+  "$XD/media3-container-1.11.1.jar"
+  "$XD/media3-database-1.11.1.jar"
+  "$XD/interpolator-1.0.0.jar"
+  "$XD/concurrent-futures-1.1.0.jar"
+  "$XD/failureaccess-1.0.2.jar"
+  "$XD/j2objc-annotations-3.0.0.jar"
+  "$XD/play-services-base-18.7.2.jar"
+  "$XD/play-services-basement-18.9.0.jar"
+  "$XD/arch-core-runtime-2.2.0.jar"
+  "$XD/exifinterface-1.4.1.jar"
+  "$XD/activity-1.11.0.jar"
+  "$XD/fragment-1.8.9.jar"
+  "$XD/core-viewtree-1.0.0.jar"
+  "$XD/loader-1.1.0.jar"
+  "$XD/viewpager-1.1.0.jar"
+  "$XD/savedstate-1.4.0.jar"
+  "$XD/lifecycle-viewmodel-2.11.0.jar"
+  "$XD/lifecycle-viewmodel-savedstate-2.11.0.jar"
+  "$XD/lifecycle-livedata-2.11.0.jar"
+  "$XD/lifecycle-livedata-core-2.11.0.jar"
+  "$XD/core-common-2.2.0.jar"
+  "$XD/customview-1.2.0.jar"
+  "$XD/kotlinx-serialization-core-jvm-1.7.3.jar"
+)
+for j in "${DEPJARS[@]}" "${KOTLIN_JARS[@]}" "${EXTRA_JARS[@]}"; do
   [ -s "$j" ] || { echo "FATAL: dependency missing: $j"; exit 1; }
   unzip -l "$j" >/dev/null 2>&1 || { echo "FATAL: dependency not a zip: $j"; exit 1; }
 done
-echo "manifest clean, crash handler present, ${#DEPJARS[@]} dependency jars present"
+echo "manifest clean, crash handler present, ${#DEPJARS[@]} dependency + ${#KOTLIN_JARS[@]} kotlin + ${#EXTRA_JARS[@]} extra jars present"
 
 rm -rf "$B"
 mkdir -p "$B/flat" "$B/gen" "$B/classes" "$B/dex" "$B/src" "$OUT"
@@ -78,23 +127,81 @@ mkdir -p "$B/flat" "$B/gen" "$B/classes" "$B/dex" "$B/src" "$OUT"
 echo "== 1/6 aapt2 compile =="
 "$BT/aapt2" compile --dir "$APP_DIR/src/main/res" -o "$B/flat/"
 
-echo "== 2/6 aapt2 link (L, vc 20) =="
+# Library resources + library R classes.
+#
+# GeckoView and its dependency closure reference their own R classes
+# (org.mozilla.geckoview.R$drawable in GeckoAppShell.getIconForExtension,
+# androidx.fragment.R$id, com.google.android.gms.base.R$string, ...). A Gradle
+# build gets those for free because AGP merges every AAR's res/ into the app and
+# generates R for each package. This hand build did not, so each of them was a
+# latent NoClassDefFoundError / Resources$NotFoundException.
+#
+# Fix: merge every closure AAR's res/, then let aapt2 emit an R class per library
+# package via --extra-packages. The R.java files land in $B/gen/<pkg>/R.java.
+LIBAARS=(
+  "/root/android-sdk/m2/geckoview-arm64-v8a.aar|org.mozilla.geckoview"
+  "$APP_DIR/libs/aar/core-1.19.1.aar|androidx.core"
+  "$APP_DIR/libs/aar/activity-1.11.0.aar|androidx.activity"
+  "$APP_DIR/libs/aar/fragment-1.8.9.aar|androidx.fragment"
+  "$APP_DIR/libs/aar/core-viewtree-1.0.0.aar|androidx.core.viewtree"
+  "$APP_DIR/libs/aar/lifecycle-runtime-android-2.11.0.aar|androidx.lifecycle.runtime"
+  "$APP_DIR/libs/aar/lifecycle-viewmodel-android-2.11.0.aar|androidx.lifecycle.viewmodel"
+  "$APP_DIR/libs/aar/startup-runtime-1.1.1.aar|androidx.startup"
+  "$APP_DIR/libs/aar/core-runtime-2.2.0.aar|androidx.arch.core"
+  "$APP_DIR/libs/aar/exifinterface-1.4.1.aar|androidx.exifinterface"
+  "$APP_DIR/libs/aar/savedstate-android-1.4.0.aar|androidx.savedstate"
+  "$APP_DIR/libs/aar/viewpager-1.1.0.aar|androidx.viewpager"
+  "$APP_DIR/libs/aar/interpolator-1.0.0.aar|androidx.interpolator"
+  "$APP_DIR/libs/aar/media3-exoplayer-1.11.1.aar|androidx.media3.exoplayer"
+  "$APP_DIR/libs/aar/play-services-base-18.7.2.aar|com.google.android.gms.base"
+  "$APP_DIR/libs/aar/play-services-basement-18.9.0.aar|com.google.android.gms.common"
+  "$APP_DIR/libs/aar/customview-1.2.0.aar|androidx.customview"
+)
+rm -rf "$B/libres" "$B/flatlib"
+mkdir -p "$B/libres" "$B/flatlib"
+EXTRAPKGS=()
+LIDX=0
+for pair in "${LIBAARS[@]}"; do
+  aar="${pair%%|*}"
+  pkg="${pair##*|}"
+  [ -s "$aar" ] || { echo "FATAL: library aar missing: $aar"; exit 1; }
+  d="$B/libres/$LIDX"
+  mkdir -p "$d" "$B/flatlib/$LIDX"
+  unzip -o -q "$aar" 'res/*' -d "$d" || true
+  if [ -d "$d/res" ]; then
+    "$BT/aapt2" compile --dir "$d/res" -o "$B/flatlib/$LIDX/" || { echo "FATAL: aapt2 compile failed for $aar"; exit 1; }
+  fi
+  EXTRAPKGS+=("$pkg")
+  LIDX=$((LIDX + 1))
+done
+echo "library packages: ${#EXTRAPKGS[@]}"
+
+echo "== 2/6 aapt2 link (L, vc 24) =="
 "$BT/aapt2" link \
   -o "$B/baseL.apk" \
   -I "$PLATFORM" \
   --manifest "$APP_DIR/src/main/AndroidManifest.xml" \
   --java "$B/gen" \
   --min-sdk-version 26 --target-sdk-version 28 \
-  --version-code 20 --version-name "1.0.6-l" \
+  --version-code 24 --version-name "1.0.10-l" \
   --auto-add-overlay \
-  "$B/flat"/*.flat
+  "$B/flat"/*.flat "$B/flatlib"/*/*.flat
 ls -l "$B/baseL.apk"
+
+# aapt2 link cannot emit one R per library package: its --extra-packages takes a
+# single package name (a comma list becomes one literal name, verified). So the
+# linked table is the source of truth: tools/genlibR.py reads the ids aapt2
+# assigned and writes <pkg>/R.java for every merged library.
+echo "-- library R classes --"
+LIBRARGS=()
+for pair in "${LIBAARS[@]}"; do LIBRARGS+=("$pair"); done
+python3 "$APP_DIR/tools/genlibR.py" "$B/baseL.apk" "$B/gen" "${LIBRARGS[@]}"
 
 echo "== 3/6 javac =="
 CP="$APP_DIR/libs/geckoview-classes.jar"
-for j in "${DEPJARS[@]}"; do CP="$CP:$j"; done
+for j in "${DEPJARS[@]}" "${KOTLIN_JARS[@]}" "${EXTRA_JARS[@]}"; do CP="$CP:$j"; done
 find "$APP_DIR/src/main/java" -name '*.java' -exec cp {} "$B/src/" \;
-find "$B/gen" -name '*.java' -exec cp {} "$B/src/" \;
+( cd "$B/gen" && find . -name '*.java' -exec cp --parents {} "$B/src/" \; )
 ls "$B/src"
 javac -proc:none -source 8 -target 8 -nowarn \
   -bootclasspath "$PLATFORM" \
@@ -117,6 +224,8 @@ java -Xmx3g -cp "$D8JAR" com.android.tools.r8.D8 \
   --output "$B/dex" \
   "$APP_DIR/libs/geckoview-classes.jar" \
   "${DEPJARS[@]}" \
+  "${KOTLIN_JARS[@]}" \
+  "${EXTRA_JARS[@]}" \
   $(find "$B/classes" -name '*.class')
 ls -l "$B"/dex/classes*.dex
 NDEX=$(ls "$B"/dex/classes*.dex | wc -l)
@@ -170,5 +279,11 @@ echo "--- media3 / guava / fido / yaml markers ---"
 for k in "media3/exoplayer" "google/common/net/HttpHeaders" "fido2/api/common" "yaml/snakeyaml"; do
   n=$(cat "$B"/dex/classes*.dex | strings -a | grep -c "$k" || true)
   echo "  $k hits=$n"
+done
+echo "--- kotlin runtime must be inside the dex (hard gate) ---"
+for k in "kotlin/jvm/internal/Intrinsics" "kotlinx/coroutines/Dispatchers" "androidx/media3/extractor/DefaultExtractorsFactory" "com/google/android/gms/common/api/Api" "androidx/lifecycle/runtime/R\$id" "androidx/startup/R\$string"; do
+  n=$(cat "$B"/dex/classes*.dex | strings -a | grep -c "$k" || true)
+  echo "  $k hits=$n"
+  [ "$n" -gt 0 ] || { echo "FATAL: $k missing from dex"; exit 1; }
 done
 echo BUILD_OK

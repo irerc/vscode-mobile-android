@@ -1,6 +1,6 @@
 # 已知问题与限制（VS Code Mobile）
 
-记录日期：2026-10-31　目标版本：VS Code 1.144.0 / GeckoView 159 / Android 7.0+
+记录日期：2026-11-08（更新）　目标版本：VS Code 1.144.0 / GeckoView 159 / Android 7.0+
 
 ## 一、已解决但值得记录的问题
 
@@ -20,6 +20,10 @@
 | 12 | d8 报 "defined multiple times" | `runtime-deps/` 里 `androidx.core-core-1.19.1.jar`、`androidx.annotation-annotation-1.11.0.jar` 与无 `core` 前缀的同名包**字节完全相同** | `tools/sanitize_deps.py` 用 `DUPS` 集合排除重复件，生成 `runtime-deps-clean/`；构建脚本只读该目录 |
 | 13 | STORED 方式打包的 178MB / 303MB APK 安装失败（「签名校验不通过，目标系统版本过高」） | `.so` 未压缩导致安装器体积/校验上限被击穿 | 改为 DEFLATE（`zip -9` 压 dex+so，`zip -0` 仅用于 assets），200MB 级可正常安装；实测上限约 178MB（STORED） |
 | 14 | K（v1.0.5-k）打包后的 dex 里仍有 33 个被引用的 androidx 类型没有定义 | 三个独立原因：① `androidx-annotation-1.11.0.jar`、`androidx-collection-1.6.0.jar`、`androidx-lifecycle-common-2.11.0.jar` 是 KMP 的 metadata-only 包（0 个 `.class`，只有 `commonMain/default/linkdata/*.knm`），对 d8 零贡献；② lifecycle-runtime / startup-runtime / tracing / versionedparcelable 从未进闭包；③ 任何 androidx jar 都不发 `R$*`，而 `androidx.core` 字节码直接读 `attr/id/styleable` 常量类 | L（v1.0.6-l）：metadata 包换成真 JVM 产物（`annotation-jvm`/`collection-jvm`/`lifecycle-common-jvm`，版本不变），补齐 4 个传递依赖，按 AAR `R.txt` 合成 `androidx-core-R.jar`（208 个 int + 7 个 int[]）。DEPJARS 增至 20 个；d8 后逐类审计 33/33 命中、0 缺失 |
+| 15 | 真机启动即崩：`NoClassDefFoundError: Failed resolution of: Lkotlin/jvm/internal/Intrinsics;`，栈顶 `androidx.collection.SimpleArrayMap.put(SimpleArrayMap.kt:397)` → `GeckoBundle.putString` → `GeckoSessionSettings.<init>` → `createGecko` | **dex 里没有任何 Kotlin 运行时**。androidx.collection / core / lifecycle 与 GeckoView 都是 Kotlin 编写，构建脚本却只喂了 Java 依赖：`kotlin-stdlib`、`kotlinx-coroutines` 从未进入 javac classpath 或 d8 输入，因此首次触碰 Kotlin 类即抛错 | 新增 `libs/kotlin/`：`kotlin-stdlib` **2.4.20**（与 GeckoView POM 声明一致）、`kotlinx-coroutines-core-jvm` / `-android` 1.10.2、`annotations` 23.0.0，同时进 classpath 与 d8；构建尾部加硬门禁，dex 中查不到 `kotlin/jvm/internal/Intrinsics` 就 `FATAL` |
+| 16 | 补齐 Kotlin 后仍埋着 `NoClassDefFoundError` 隐患 | 首个闭包漏掉 media3 / fido / guava 的传递件：`androidx.media3.extractor.*`、`androidx.media3.container.*`、`androidx.media3.database.*`、`com.google.android.gms.common.*`、`androidx.concurrent.futures.*`、guava `InternalFutures` | 用 R8（`--dontshrink`）对全部输入跑一次「Missing class」审计，逐条补 `libs/closure-extra/`（AAR 取 `classes.jar`）：media3-extractor/container/database、interpolator、concurrent-futures、`failureaccess`（**不能**用 `listenablefuture`，其 `ListenableFuture` 与 guava 33.4 重复定义）、j2objc-annotations、play-services-base 18.7.2 / basement 18.9.0（旧版 18.5/18.4 缺 `ApiMetadata`、`ComplianceOptions`，正是 fido 21.3.1 的 POM 要求的版本） |
+| 17 | 第二轮审计又出现 `androidx.fragment.*` / `androidx.savedstate.*` / `androidx.lifecycle.viewmodel.*` / `kotlinx.serialization.*` | 这条链是被 **play-services-base/basement → fragment → lifecycle/savedstate → kotlinx-serialization** 拖出来的传递依赖（WebAuthn 路径）。只补 fragment 会立刻缺下一层 | 一次补全：activity、fragment、customview、loader、viewpager、savedstate、lifecycle-viewmodel(-savedstate)、lifecycle-livedata(-core)、arch-core-runtime/core-common、exifinterface、core-viewtree、kotlinx-serialization-core 1.7.3 |
+| 18 | 库的 `R$*` 常量类不存在（`org.mozilla.geckoview.R$drawable`、`androidx.fragment.R$id`、`com.google.android.gms.base.R$string` …），Gradle 会自动生成，手写链路不会 | ① 各 AAR 的 `res/` 从未合进 APK；② `aapt2 link --extra-packages` **只接受单个包名**（传逗号列表会被当成一个包名，逐包传参则后续参数被当作输入文件）；③ 之前用假 id 手写的 `androidx-core-R.jar`、lifecycle/startup R 存根只是猜测值 | 改为「合并资源 + 反查真实 id」：`tools/genlibR.py` 先 `aapt2 dump resources` 读出链接后的资源表，再按每个 AAR 的 `R.txt` 生成 `<pkg>/R.java`（`styleable` 数组直接取 `R.txt` 常量；style 名需把下划线映射成 aapt2 输出的点号形式）。15 个库包、166 个 id、0 缺失；假 id 存根全部删除 |
 
 ## 二、架构性限制（不可绕过，需知悉）
 

@@ -1,16 +1,18 @@
 # VS Code Mobile —— 安卓移植交付说明
 
-记录日期：2026-10-31　版本：VS Code 1.144.0 / GeckoView 159 / Android 8.0+
+记录日期：2026-11-08（更新）　版本：VS Code 1.144.0 / GeckoView 159 / Android 8.0+
 
 ## 一、交付物
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 203,548,630 字节（约 194 MB），MD5 `878f74320e3dbd4eb6da8da953cae306`（v1.0.6-l / versionCode 20） |
-| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 同上，MD5 `878f74320e3dbd4eb6da8da953cae306` |
-| GitHub 发布页 | `irerc/vscode-mobile-android`，Release `v1.0.6-l` 附件 `vscode-mobile.apk` | 同上 |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 205,642,187 字节（约 196 MB），MD5 `a31201687daca7225f88825d3d02e150`（v1.0.10-l / versionCode 24） |
+| 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 需在每次构建后重新 `cp` 并核对 MD5 |
+| GitHub 发布页 | `irerc/vscode-mobile-android` | 见 Release 页 |
 | APK 源码工程 | `android-app/` | — |
 | 一键构建脚本 | `android-app/build10.sh` | — |
+| 依赖拉取脚本 | `android-app/tools/fetch_deps.sh` | 从 Maven Central + Google Maven 重建 `libs/`（约 1 分钟） |
+| 库 R 生成器 | `android-app/tools/genlibR.py` | 按 AAR `R.txt` + 链接后的资源表生成各库 `R.java` |
 | 已知问题清单 | `docs/known-issues.md` | — |
 
 **这个 APK 是完全自包含的**：VS Code 服务端、Ubuntu 用户态、PRoot 执行器、GeckoView 浏览器内核全部打进包里。安装后不依赖容器、不依赖局域网、不依赖手机上任何已有浏览器，飞行模式下也能启动。
@@ -72,7 +74,8 @@
 ## 五、构建方法（复现）
 
 ```bash
-bash "/root/VS Code移植/android-app/build10.sh"
+bash android-app/tools/fetch_deps.sh    # 首次或换机后：重建 libs/（gitignore）
+bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 ```
 
 流水线：`aapt2 compile → aapt2 link → javac（JDK17，-source 8）→ d8 → 打包 so/assets → zipalign → apksigner`。
