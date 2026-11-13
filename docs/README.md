@@ -94,6 +94,18 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 ## 六、验证记录
 
+**v1.0.10-l（versionCode 24，当前产物）的静态验证**
+
+- `apksigner verify` → v1/v2/v3 全部通过；`zipalign -c -P 16 4` 通过。
+- `aapt2 dump badging` → `dev.dsh.vscodemobile`，`minSdk=26`，`targetSdk=28`。
+- dex 关键类门禁（构建脚本内 `FATAL` 级）：`kotlin/jvm/internal/Intrinsics`、`kotlinx/coroutines/Dispatchers`、`androidx/media3/extractor/DefaultExtractorsFactory`、`com/google/android/gms/common/api/Api`、`androidx/lifecycle/runtime/R$id`、`androidx/startup/R$string` 全部命中。
+- 库 R 类实测进 dex：`androidx.fragment.R$id/$animator/$styleable`、`org.mozilla.geckoview.R$drawable`、`com.google.android.gms.base.R$string/$styleable`、`androidx.media3.exoplayer.R$string`、`androidx.core.R$id/$string`、`androidx.activity.R$id`、`androidx.lifecycle.runtime.R$id`。
+- R8 `--dontshrink` 全量缺失类审计 → 剩余 59 条全部是 `android.*` / `java.*` / `javax.*` / `libcore.*` 框架桩或 `org.checkerframework`、`org.jspecify` 等纯注解类型，无实际类型缺失。
+- APK 205,642,187 字节，MD5 `a31201687daca7225f88825d3d02e150`，SHA-256 `e6ff13a3529e3c970fc38ba663277f9fb5b9dfd49a9539995e7413b1265e77b3`；该 SHA-256 与 GitHub Release 资产 `digest` 字段逐字节一致（资产 id 743868118）。
+- 依赖可从零重建：`tools/fetch_deps.sh` 在 64 秒内重建被 gitignore 的 `libs/`（19 个首轮闭包 + 4 个 kotlin + 24 个第二闭包 + 16 个 AAR），随后 `build10.sh` 直接 `BUILD_OK`。
+
+**v1.0.6-l（历史产物）的静态验证**
+
 - `apksigner verify` → 通过（SHA-256 `1d571632…c47416346`）。
 - `aapt2 dump badging` → `package=dev.dsh.vscodemobile`，`minSdk=26`，`targetSdk=28`，`extractNativeLibs=true`。
 - APK 内含 `classes.dex`（26KB）、`resources.arsc`、`assets/omni.ja`、3 个 `assets/runtime/*.tar.gz`、16 个 `lib/arm64-v8a/*.so`（含 `libxul.so` 154MB、`libproot.so`、`libtalloc.so`、`libprootloader.so`）。
@@ -102,4 +114,11 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 ## 七、待真机验收
 
-见 `docs/known-issues.md` 第四节。要点：首启解包耗时、PRoot 在真实 bionic 下的加载、GeckoView 渲染完整工作台、集成终端可用性、后台驻留存活。
+**v1.0.10-l 尚未在真机上跑过一次。** 它修掉的两个缺陷（缺 Kotlin 运行时、缺库 `R$*`）都是「一启动必崩」的类型，静态审计已证明这两个根因消失，但「装上后能否走到工作台」仍需一次实装运行才能确认。
+
+当前阻塞点不在代码侧，而在设备侧通道：
+
+1. 识屏（无障碍）处于关闭状态（App 桥返回 `SCREEN_MODE_OFF`），因此无法通过 UI 点按安装 APK；设备命令通道对本容器已断开（`pm install` 本来也被策略禁止）。
+2. 需要用户在 **设置 → 设备能力授权 → 识屏** 选择「实体」或「虚拟」后，助手才能点按安装并抓 `logcat`；或者用户直接在文件管理器里点开 `Download/vscode-mobile-L.apk` 安装（包已完成签名与对齐）。
+
+其余待验收项见 `docs/known-issues.md` 第四节：首启解包耗时、PRoot 在真实 bionic 下的加载、GeckoView 渲染完整工作台、集成终端可用性、后台驻留存活。

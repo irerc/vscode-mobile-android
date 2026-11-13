@@ -13,6 +13,8 @@
 
 本版修复了两个致命的启动崩溃：dex 缺 Kotlin 运行时（`NoClassDefFoundError: kotlin/jvm/internal/Intrinsics`）与库 `R$*` 常量类缺失。详见 `docs/known-issues.md` 第 15–18 条。
 
+> 静态审计已全绿（签名、对齐、dex 关键类、R8 缺失类归零），但**尚未在真机上跑过一次启动**：当前设备识屏关闭、设备命令通道断开，无法安装。验收清单见 `docs/README.md` 第七节。
+
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 
 ## 它是什么
