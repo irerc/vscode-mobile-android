@@ -100,6 +100,14 @@ bash android-app/tools/verify_apk.sh dist/vscode-mobile-L.apk
 
 一条命令覆盖本项目被真机打回过的每一类缺陷：签名（v1/v2/v3）、`zipalign -P 16`、`targetSdk=28`、dex 里的 Kotlin 运行时 / `androidx.collection.SimpleArrayMap` / `androidx.*.R$*` / media3+gms 闭包、自检 marker（`SELFTEST`、`ok-rootfs`、`ok-vscode`）、APK 内 assets 与 native 库、以及 serve-web 树里的 `node` / `server-main.js` / `@vscode/deviceid` / `@github/copilot-sdk` / `node-pty` 预编译件。全过输出 `VERIFY_OK`。
 
+解包器另有一条可复现回归（正是让每次首启停在「运行时解包失败」的那条路径）：
+
+```bash
+bash android-app/tools/test_extract.sh android-app
+```
+
+它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
+
 脚本本身也踩过两个坑并已固化：JDK 17 在 `LANG` 未设时 `LoggerFinderLoader` 抛 `ExceptionInInitializerError`，以及含空格+中文的工程路径直接传给 `java` 会参数乱码——所以脚本 `export LANG=C.UTF-8` 且先 `cp` 到 ASCII 临时路径。
 
 ## 六、验证记录（历史）
