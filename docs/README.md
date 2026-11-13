@@ -92,7 +92,17 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 | `usr.tar.gz` | 136,008 B | PRoot 备用副本（实际运行走 nativeLibraryDir） |
 | `omni.ja` | 15,141,515 B | GeckoView 资源包 |
 
-## 六、验证记录
+## 六、复核产物（任何人都能跑）
+
+```bash
+bash android-app/tools/verify_apk.sh dist/vscode-mobile-L.apk
+```
+
+一条命令覆盖本项目被真机打回过的每一类缺陷：签名（v1/v2/v3）、`zipalign -P 16`、`targetSdk=28`、dex 里的 Kotlin 运行时 / `androidx.collection.SimpleArrayMap` / `androidx.*.R$*` / media3+gms 闭包、自检 marker（`SELFTEST`、`ok-rootfs`、`ok-vscode`）、APK 内 assets 与 native 库、以及 serve-web 树里的 `node` / `server-main.js` / `@vscode/deviceid` / `@github/copilot-sdk` / `node-pty` 预编译件。全过输出 `VERIFY_OK`。
+
+脚本本身也踩过两个坑并已固化：JDK 17 在 `LANG` 未设时 `LoggerFinderLoader` 抛 `ExceptionInInitializerError`，以及含空格+中文的工程路径直接传给 `java` 会参数乱码——所以脚本 `export LANG=C.UTF-8` 且先 `cp` 到 ASCII 临时路径。
+
+## 六、验证记录（历史）
 
 **v1.0.13-l（versionCode 27，当前产物）的静态 + 真机验证**
 

@@ -183,7 +183,7 @@ echo "== 2/6 aapt2 link (L, vc 24) =="
   --manifest "$APP_DIR/src/main/AndroidManifest.xml" \
   --java "$B/gen" \
   --min-sdk-version 26 --target-sdk-version 28 \
-  --version-code 27 --version-name "1.0.13-l" \
+  --version-code 28 --version-name "1.0.14-l" \
   --auto-add-overlay \
   "$B/flat"/*.flat "$B/flatlib"/*/*.flat
 ls -l "$B/baseL.apk"

@@ -80,6 +80,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // A first launch unpacks ~1.6 GB; letting the display sleep throttles that
+        // badly (and is what users read as "stuck").
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread th, Throwable e) {
@@ -396,6 +399,9 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStop(GeckoSession s, boolean success) {
+                // SELFTEST: the only way to prove the workbench really loaded without
+                // reading the screen is to report GeckoView's own page-stop verdict.
+                Log.i(TAG, "SELFTEST pagestop success=" + success);
                 ui.post(new Runnable() {
                     public void run() {
                         if (progress != null) {
@@ -703,6 +709,77 @@ public class MainActivity extends Activity {
                 }
             }
         });
+        selfTest();
+    }
+
+    /**
+     * Self check: without a readable screen the only trustworthy evidence that the
+     * workbench really renders is the server answering and GeckoView's own
+     * page-stop verdict, both of which are written to logcat. Started only once
+     * ready, and never on the UI thread.
+     */
+    private void selfTest() {
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    Thread.sleep(8000);
+                    String html = httpGet(baseUrl);
+                    java.util.regex.Matcher m = java.util.regex.Pattern
+                            .compile("(/stable[^\"']*workbench\\.js)").matcher(html);
+                    String path = m.find() ? m.group(1) : "";
+                    String url = path.startsWith("/")
+                            ? baseUrl.replaceAll("/+$", "") + path
+                            : path;
+                    int code = 0;
+                    long len = -1;
+                    if (url.length() > 0) {
+                        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                        try {
+                            c.setConnectTimeout(5000);
+                            c.setReadTimeout(30000);
+                            code = c.getResponseCode();
+                            len = c.getContentLengthLong();
+                        } finally {
+                            c.disconnect();
+                        }
+                    }
+                    Log.i(TAG, "SELFTEST html=" + html.length() + " wbpath=" + path
+                            + " wbcode=" + code + " wblen=" + len);
+                } catch (Throwable t) {
+                    Log.e(TAG, "SELFTEST", t);
+                }
+            }
+        }, "selftest").start();
+    }
+
+    private String httpGet(String url) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(15000);
+            InputStream in = c.getInputStream();
+            try {
+                byte[] buf = new byte[65536];
+                StringBuilder sb = new StringBuilder();
+                int n;
+                while ((n = in.read(buf)) > 0 && sb.length() < 262144) {
+                    sb.append(new String(buf, 0, n, "UTF-8"));
+                }
+                return sb.toString();
+            } finally {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable t) {
+            return "";
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
     }
 
     // ------------------------------------------------------------ lifecycle --
