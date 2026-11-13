@@ -183,7 +183,7 @@ echo "== 2/6 aapt2 link (L, vc 24) =="
   --manifest "$APP_DIR/src/main/AndroidManifest.xml" \
   --java "$B/gen" \
   --min-sdk-version 26 --target-sdk-version 28 \
-  --version-code 24 --version-name "1.0.10-l" \
+  --version-code 27 --version-name "1.0.13-l" \
   --auto-add-overlay \
   "$B/flat"/*.flat "$B/flatlib"/*/*.flat
 ls -l "$B/baseL.apk"
@@ -281,7 +281,7 @@ for k in "media3/exoplayer" "google/common/net/HttpHeaders" "fido2/api/common" "
   echo "  $k hits=$n"
 done
 echo "--- kotlin runtime must be inside the dex (hard gate) ---"
-for k in "kotlin/jvm/internal/Intrinsics" "kotlinx/coroutines/Dispatchers" "androidx/media3/extractor/DefaultExtractorsFactory" "com/google/android/gms/common/api/Api" "androidx/lifecycle/runtime/R\$id" "androidx/startup/R\$string"; do
+for k in "kotlin/jvm/internal/Intrinsics" "kotlinx/coroutines/Dispatchers" "androidx/media3/extractor/DefaultExtractorsFactory" "com/google/android/gms/common/api/Api" "androidx/lifecycle/runtime/R\$id" "androidx/startup/R\$string" "androidx/collection/SimpleArrayMap" "androidx/annotation/Nullable"; do
   n=$(cat "$B"/dex/classes*.dex | strings -a | grep -c "$k" || true)
   echo "  $k hits=$n"
   [ "$n" -gt 0 ] || { echo "FATAL: $k missing from dex"; exit 1; }

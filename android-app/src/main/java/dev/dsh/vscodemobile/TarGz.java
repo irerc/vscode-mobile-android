@@ -1,5 +1,7 @@
 package dev.dsh.vscodemobile;
 
+import android.system.Os;
+
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -7,11 +9,24 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 /**
- * Minimal tar.gz extractor using JDK only.
- * Supports: regular files, directories, symlinks, hardlinks, GNU long names, pax path headers.
+ * Minimal tar.gz extractor using JDK/Android only.
+ *
+ * Supports: regular files, directories, symlinks, hardlinks, GNU long names,
+ * pax path headers.
+ *
+ * IMPORTANT: symlinks are recorded during the single pass and created only
+ * after the whole archive has been drained. An Ubuntu rootfs is full of
+ * absolute symlinks (etc/alternatives/pager -> /usr/bin/pager, lib -> usr/lib,
+ * ...). If those links existed while later entries were still being written,
+ * both FileOutputStream and getCanonicalPath() would follow them out of the
+ * destination directory: writes would land outside the app data dir and the
+ * escape guard would abort with "escape etc/alternatives/pager". Deferring
+ * link creation keeps every write on a plain, freshly created directory path.
  */
 public final class TarGz {
 
@@ -22,7 +37,11 @@ public final class TarGz {
         if (!destDir.exists() && !destDir.mkdirs()) {
             throw new IOException("cannot create " + destDir);
         }
-        String base = destDir.getCanonicalPath();
+        File baseFile = destDir.getCanonicalFile();
+        String base = baseFile.getPath();
+        String basePrefix = base.endsWith(File.separator) ? base : base + File.separator;
+
+        List<String[]> links = new ArrayList<String[]>();
         GZIPInputStream gz = new GZIPInputStream(new BufferedInputStream(raw, 65536), 65536);
         byte[] hdr = new byte[512];
         String pending = null;
@@ -73,16 +92,20 @@ public final class TarGz {
                 skipPad(gz, size);
                 continue;
             }
-            if (rel.startsWith("/") || rel.contains("..")) {
+            // Purely lexical validation: no leading slash, no traversal, no empty
+            // segments. Symlinks in destDir are never consulted here.
+            if (rel.startsWith("/") || rel.indexOf('\0') >= 0 || hasDotDot(rel)) {
                 throw new IOException("unsafe path " + rel);
             }
             File out = new File(destDir, rel);
-            String canon = out.getCanonicalPath();
-            if (!canon.equals(base) && !canon.startsWith(base + File.separator)) {
+            String parentCanon = out.getParentFile() == null
+                    ? base
+                    : out.getParentFile().getCanonicalPath();
+            if (!parentCanon.equals(base) && !parentCanon.startsWith(basePrefix)) {
                 throw new IOException("escape " + rel);
             }
             if (type == '5') {
-                if (!out.exists() && !out.mkdirs()) {
+                if (!out.isDirectory() && !out.mkdirs() && !out.isDirectory()) {
                     throw new IOException("cannot create " + out);
                 }
                 skipFully(gz, size);
@@ -91,18 +114,12 @@ public final class TarGz {
                 continue;
             }
             File parent = out.getParentFile();
-            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs() && !parent.isDirectory()) {
                 throw new IOException("cannot create " + parent);
             }
             if (type == '2') {
-                try {
-                    if (out.exists()) {
-                        out.delete();
-                    }
-                    Files.createSymbolicLink(out.toPath(),
-                            out.toPath().getFileSystem().getPath(link));
-                } catch (Throwable ignored) {
-                }
+                // Recorded, created after the pass is over.
+                links.add(new String[]{rel, link});
                 skipFully(gz, size);
                 skipPad(gz, size);
                 count++;
@@ -116,6 +133,7 @@ public final class TarGz {
                 continue;
             }
             if (type == 0 || type == '0' || type == '7') {
+                deleteIfLink(out);
                 OutputStream os = new FileOutputStream(out);
                 try {
                     copy(gz, os, size);
@@ -139,7 +157,57 @@ public final class TarGz {
             gz.close();
         } catch (Throwable ignored) {
         }
+        for (String[] l : links) {
+            File out = new File(destDir, l[0]);
+            File parent = out.getParentFile();
+            if (parent != null && !parent.isDirectory()) {
+                parent.mkdirs();
+            }
+            deleteIfLink(out);
+            symlink(l[1], out);
+            count++;
+        }
         return count;
+    }
+
+    private static boolean hasDotDot(String rel) {
+        int i = 0;
+        while (true) {
+            int slash = rel.indexOf('/', i);
+            String seg = slash < 0 ? rel.substring(i) : rel.substring(i, slash);
+            if (seg.equals("..")) {
+                return true;
+            }
+            if (slash < 0) {
+                return false;
+            }
+            i = slash + 1;
+        }
+    }
+
+    /** Removes an existing symlink (never the file it points at). */
+    private static void deleteIfLink(File f) {
+        try {
+            if (Files.isSymbolicLink(f.toPath())) {
+                f.delete();
+            } else if (f.exists() && !f.isDirectory()) {
+                f.delete();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void symlink(String target, File link) {
+        try {
+            Os.symlink(target, link.getAbsolutePath());
+            return;
+        } catch (Throwable ignored) {
+        }
+        try {
+            Files.createSymbolicLink(link.toPath(),
+                    link.toPath().getFileSystem().getPath(target));
+        } catch (Throwable ignored) {
+        }
     }
 
     private static String paxPath(byte[] buf) {
@@ -174,6 +242,7 @@ public final class TarGz {
         }
         InputStream in = Files.newInputStream(src.toPath());
         try {
+            deleteIfLink(dst);
             OutputStream out = new FileOutputStream(dst);
             try {
                 copy(in, out, Long.MAX_VALUE);
@@ -284,6 +353,27 @@ public final class TarGz {
             v = v * 8 + (c - '0');
         }
         return v;
+    }
+
+    /** Recursively deletes a tree without ever following symlinks. */
+    public static void wipe(File f) {
+        if (f == null || !f.exists() && !Files.isSymbolicLink(f.toPath())) {
+            return;
+        }
+        try {
+            if (Files.isSymbolicLink(f.toPath()) || f.isFile()) {
+                f.delete();
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+        File[] kids = f.listFiles();
+        if (kids != null) {
+            for (File k : kids) {
+                wipe(k);
+            }
+        }
+        f.delete();
     }
 
     public static void main(String[] args) throws Exception {

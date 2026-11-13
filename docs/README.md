@@ -6,7 +6,7 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 205,642,187 字节（约 196 MB），MD5 `a31201687daca7225f88825d3d02e150`（v1.0.10-l / versionCode 24） |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 206,485,963 字节（约 197 MB），MD5 `f8bb77f936051cd82fa8040220a7c1ec`，SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c`（v1.0.13-l / versionCode 27） |
 | 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 需在每次构建后重新 `cp` 并核对 MD5 |
 | GitHub 发布页 | `irerc/vscode-mobile-android` | 见 Release 页 |
 | APK 源码工程 | `android-app/` | — |
@@ -94,14 +94,19 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 ## 六、验证记录
 
-**v1.0.10-l（versionCode 24，当前产物）的静态验证**
+**v1.0.13-l（versionCode 27，当前产物）的静态 + 真机验证**
 
 - `apksigner verify` → v1/v2/v3 全部通过；`zipalign -c -P 16 4` 通过。
 - `aapt2 dump badging` → `dev.dsh.vscodemobile`，`minSdk=26`，`targetSdk=28`。
 - dex 关键类门禁（构建脚本内 `FATAL` 级）：`kotlin/jvm/internal/Intrinsics`、`kotlinx/coroutines/Dispatchers`、`androidx/media3/extractor/DefaultExtractorsFactory`、`com/google/android/gms/common/api/Api`、`androidx/lifecycle/runtime/R$id`、`androidx/startup/R$string` 全部命中。
 - 库 R 类实测进 dex：`androidx.fragment.R$id/$animator/$styleable`、`org.mozilla.geckoview.R$drawable`、`com.google.android.gms.base.R$string/$styleable`、`androidx.media3.exoplayer.R$string`、`androidx.core.R$id/$string`、`androidx.activity.R$id`、`androidx.lifecycle.runtime.R$id`。
 - R8 `--dontshrink` 全量缺失类审计 → 剩余 59 条全部是 `android.*` / `java.*` / `javax.*` / `libcore.*` 框架桩或 `org.checkerframework`、`org.jspecify` 等纯注解类型，无实际类型缺失。
-- APK 205,642,187 字节，MD5 `a31201687daca7225f88825d3d02e150`，SHA-256 `e6ff13a3529e3c970fc38ba663277f9fb5b9dfd49a9539995e7413b1265e77b3`；该 SHA-256 与 GitHub Release 资产 `digest` 字段逐字节一致（资产 id 743868118）。
+- APK 206,485,963 字节，MD5 `f8bb77f936051cd82fa8040220a7c1ec`，SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c`。
+- 依赖闭包门禁：`tools/fetch_deps.sh` 尾部对 `libs/` 下每个 classes jar 数 `.class` 条目，任何一个是 0 立即失败——这条门禁正是用来抓住 KMP metadata 空包的（`collection-1.6.0.jar` / `annotation-1.11.0.jar` / `lifecycle-common-2.11.0.jar` / `lifecycle-runtime-2.11.0.aar` 全部为 0）。
+- dex 新增门禁 `androidx/collection/SimpleArrayMap`（命中 8 处），这是上一版真机崩溃 `GeckoAppShell.<clinit>` 的直接元凶。
+- 解包器回归：`TarGz` 改为「单遍流式 + 软链延后创建」，rootfs 里的 `etc/alternatives/* → /usr/bin/*` 绝对软链不再被判为路径逃逸；`ensureRuntime` 分阶段 marker（`.ok-rootfs` / `.ok-vscode`）。
+- serve-web 树完整性：容器内（同架构同 glibc）实跑 `out/server-main.js` → `Web UI available`、`Extension host agent started`、`ERR_MODULE_NOT_FOUND` 归零，`/` 返回 200，`workbench.js`(21,490,997 B)、`workbench.css`(1,811,449 B)、`nls.messages.js`(1,321,164 B) 等静态资源全部 200。
+- **真机（Xiaomi 26048RP6AC / Android 17 / SDK 37）实测链路**：`/app/install` 安装 27 → 启动进程存活且不再闪退 → GeckoView 起 `:crashhelper`/`:gpu`/两个 `:sandboxed_tab` 内容进程 → 首次解包成功 → 子进程 `libproot.so` + `node` 起来 → `/proc/net/tcp` 中 `127.0.0.1:8800` 为 LISTEN（uid 10321）且已有 GeckoView 的 ESTABLISHED 连接。
 - 依赖可从零重建：`tools/fetch_deps.sh` 在 64 秒内重建被 gitignore 的 `libs/`（19 个首轮闭包 + 4 个 kotlin + 24 个第二闭包 + 16 个 AAR），随后 `build10.sh` 直接 `BUILD_OK`。
 
 **v1.0.6-l（历史产物）的静态验证**
@@ -114,11 +119,13 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 ## 七、待真机验收
 
-**v1.0.10-l 尚未在真机上跑过一次。** 它修掉的两个缺陷（缺 Kotlin 运行时、缺库 `R$*`）都是「一启动必崩」的类型，静态审计已证明这两个根因消失，但「装上后能否走到工作台」仍需一次实装运行才能确认。
+**v1.0.13-l 已在真机上跑通「安装 → 启动 → 解包 → PRoot → serve-web 监听 8800」整条链路**，这是历史上第一次走过闪退。
 
-当前阻塞点不在代码侧，而在设备侧通道：
+仍未由助手自证的一项：**工作台是否完整渲染**（左侧资源管理器、底部终端、扩展面板）。原因不在代码，而在设备侧观察通道——识屏（无障碍）仍被判定为关闭，App 桥返回 `SCREEN_MODE_OFF` / `SCREEN_MODE_PHYSICAL_OFF`，助手无法读屏或截图；容器网络与设备回环不在同一命名空间，也无法从容器直接探 `127.0.0.1:8800`。
 
-1. 识屏（无障碍）处于关闭状态（App 桥返回 `SCREEN_MODE_OFF`），因此无法通过 UI 点按安装 APK；设备命令通道对本容器已断开（`pm install` 本来也被策略禁止）。
-2. 需要用户在 **设置 → 设备能力授权 → 识屏** 选择「实体」或「虚拟」后，助手才能点按安装并抓 `logcat`；或者用户直接在文件管理器里点开 `Download/vscode-mobile-L.apk` 安装（包已完成签名与对齐）。
+要把它变成自证，只需二选一：
 
-其余待验收项见 `docs/known-issues.md` 第四节：首启解包耗时、PRoot 在真实 bionic 下的加载、GeckoView 渲染完整工作台、集成终端可用性、后台驻留存活。
+1. 用户在 **设置 → 设备能力授权 → 识屏** 选「实体」（选完若仍报 `SCREEN_MODE_PHYSICAL_OFF`，把 DSHA App 切后台再切回，让能力开关重新加载）；
+2. 或用户肉眼确认一次界面后告知，助手据此更新验收结论。
+
+其余待验收项见 `docs/known-issues.md` 第四节：首启解包耗时与内存峰值、集成终端能否在 PRoot 内起 `/bin/bash`、后台驻留 10 分钟后 serve-web 是否被系统回收。

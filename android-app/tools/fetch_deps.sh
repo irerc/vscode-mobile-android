@@ -71,11 +71,16 @@ else
 fi
 
 echo "== first closure (runtime-deps-clean) =="
-aar_classes "$G/androidx/annotation/annotation/1.11.0/annotation-1.11.0.jar"             "$LIB/runtime-deps-clean/androidx-annotation-1.11.0.jar"
-aar_classes "$G/androidx/collection/collection/1.6.0/collection-1.6.0.jar"               "$LIB/runtime-deps-clean/androidx-collection-1.6.0.jar"
+# annotation/collection/lifecycle-common/lifecycle-runtime are Kotlin-Multiplatform
+# modules: the plain artifact (e.g. collection-1.6.0.jar) is only klib METADATA and
+# contains ZERO .class files. Using it silently produced a dex without
+# androidx.collection.SimpleArrayMap, which crashed GeckoAppShell.<clinit> on device
+# with NoClassDefFoundError. Always take the -jvm / -android variant.
+aar_classes "$G/androidx/annotation/annotation-jvm/1.11.0/annotation-jvm-1.11.0.jar"     "$LIB/runtime-deps-clean/androidx-annotation-1.11.0.jar"
+aar_classes "$G/androidx/collection/collection-jvm/1.6.0/collection-jvm-1.6.0.jar"       "$LIB/runtime-deps-clean/androidx-collection-1.6.0.jar"
 aar_classes "$G/androidx/core/core/1.19.1/core-1.19.1.aar"                               "$LIB/runtime-deps-clean/androidx-core-1.19.1.jar"
-aar_classes "$G/androidx/lifecycle/lifecycle-common/2.11.0/lifecycle-common-2.11.0.jar" "$LIB/runtime-deps-clean/androidx-lifecycle-common-2.11.0.jar"
-aar_classes "$G/androidx/lifecycle/lifecycle-runtime/2.11.0/lifecycle-runtime-2.11.0.aar" "$LIB/runtime-deps-clean/androidx-lifecycle-runtime-2.11.0.jar"
+aar_classes "$G/androidx/lifecycle/lifecycle-common-jvm/2.11.0/lifecycle-common-jvm-2.11.0.jar" "$LIB/runtime-deps-clean/androidx-lifecycle-common-2.11.0.jar"
+aar_classes "$G/androidx/lifecycle/lifecycle-runtime-android/2.11.0/lifecycle-runtime-android-2.11.0.aar" "$LIB/runtime-deps-clean/androidx-lifecycle-runtime-2.11.0.jar"
 aar_classes "$G/androidx/startup/startup-runtime/1.1.1/startup-runtime-1.1.1.aar"       "$LIB/runtime-deps-clean/androidx-startup-runtime-1.1.1.jar"
 aar_classes "$G/androidx/tracing/tracing/1.2.0/tracing-1.2.0.aar"                       "$LIB/runtime-deps-clean/androidx-tracing-1.2.0.jar"
 aar_classes "$G/androidx/versionedparcelable/versionedparcelable/1.1.1/versionedparcelable-1.1.1.aar" "$LIB/runtime-deps-clean/androidx-versionedparcelable-1.1.1.jar"
@@ -143,5 +148,18 @@ for a in \
   "$G/com/google/android/gms/play-services-basement/18.9.0/play-services-basement-18.9.0.aar" ; do
   fetch "$a" "$LIB/aar/$(basename "$a")"
 done
+
+echo "== every classes jar must really contain classes =="
+bad=0
+for j in "$LIB"/runtime-deps-clean/*.jar "$LIB"/kotlin/*.jar "$LIB"/closure-extra/*.jar; do
+  [ -s "$j" ] || continue
+  n=$(unzip -l "$j" 2>/dev/null | grep -c '\.class$' || true)
+  if [[ "$n" -eq 0 ]]; then
+    echo "  FATAL: 0 .class entries in ${j#$LIB/} (wrong KMP metadata artifact?)"
+    bad=1
+  fi
+done
+[ "$bad" -eq 0 ] || exit 1
+echo "  all classes jars OK"
 
 echo "FETCH_OK"

@@ -9,11 +9,11 @@
 
 ## 直接下载
 
-**vscode-mobile.apk** · 205,642,187 字节（约 196 MB） · MD5 `a31201687daca7225f88825d3d02e150` · versionCode 24 / `1.0.10-l`
+**vscode-mobile.apk** · 206,485,963 字节（约 197 MB） · MD5 `f8bb77f936051cd82fa8040220a7c1ec` · SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c` · versionCode 27 / `1.0.13-l`
 
-本版修复了两个致命的启动崩溃：dex 缺 Kotlin 运行时（`NoClassDefFoundError: kotlin/jvm/internal/Intrinsics`）与库 `R$*` 常量类缺失。详见 `docs/known-issues.md` 第 15–18 条。
+本版修掉的真机崩溃链共五处，全部有 logcat 或本地复跑证据：dex 缺 Kotlin 运行时、库 `R$*` 常量类缺失、KMP metadata 空包导致 `androidx.collection.SimpleArrayMap` 不在 dex（`GeckoAppShell.<clinit>` 崩溃）、`TarGz` 把绝对软链误判为路径逃逸导致解包中止（`IOException: escape etc/alternatives/pager`）、`vscode.tar.gz` 缺 `@vscode/deviceid` 与 `@github/copilot-sdk`。详见 `docs/known-issues.md` 第 15–21 条。
 
-> 静态审计已全绿（签名、对齐、dex 关键类、R8 缺失类归零），但**尚未在真机上跑过一次启动**：当前设备识屏关闭、设备命令通道断开，无法安装。验收清单见 `docs/README.md` 第七节。
+> 真机进度（Xiaomi / Android 17 / SDK 37）：安装成功 → 启动**不再闪退** → GeckoView 起 `sandboxed_tab` 内容进程 → 运行时解包完成 → `libproot.so`+`node` 起 `serve-web` → `127.0.0.1:8800` 处于 LISTEN 且已有 GeckoView 连接。剩余一项待肉眼确认：工作台是否完整渲染（设备识屏关闭，无法读屏自证）。验收清单见 `docs/README.md` 第七节。
 
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 

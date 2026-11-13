@@ -465,7 +465,7 @@ public class MainActivity extends Activity {
             }
             uiStatus("\u6B63\u5728\u51C6\u5907\u8FD0\u884C\u65F6\uFF08\u9996\u6B21\u542F\u52A8\u7EA6 1\u20132 \u5206\u949F\uFF09\u2026");
             if (!ensureRuntime()) {
-                uiError("\u8FD0\u884C\u65F6\u89E3\u5305\u5931\u8D25\uFF0C\u8BF7\u786E\u4FDD\u5B58\u50A8\u7A7A\u95F4\u5145\u8DB3\u540E\u91CD\u8BD5\u3002");
+                uiError("\u8FD0\u884C\u65F6\u89E3\u5305\u5931\u8D25\uFF1A" + runtimeError);
                 return;
             }
             uiStatus("\u6B63\u5728\u542F\u52A8 VS Code \u670D\u52A1\u2026");
@@ -497,24 +497,52 @@ public class MainActivity extends Activity {
         }
     }
 
+    private volatile String runtimeError = "";
+
     private boolean ensureRuntime() {
         File files = getFilesDir();
         File rootfs = new File(files, "rootfs");
         File proot = new File(getApplicationInfo().nativeLibraryDir, "libproot.so");
-        File marker = new File(rootfs, ".ok");
-        if (marker.isFile() && proot.isFile()) {
+        File rootMarker = new File(rootfs, ".ok-rootfs");
+        File codeMarker = new File(rootfs, ".ok-vscode");
+        if (rootMarker.isFile() && codeMarker.isFile() && proot.isFile()) {
             return true;
         }
         try {
-            if (!rootfs.exists() && !rootfs.mkdirs()) {
-                return false;
+            // A failed earlier attempt (or a build whose extractor aborted) leaves a
+            // half written tree behind. Reusing it is what made the extractor trip
+            // over its own symlinks, so any stage without its marker is wiped first.
+            if (!rootMarker.isFile()) {
+                Log.i(TAG, "ensureRuntime: extracting rootfs");
+                uiStatus("\u6B63\u5728\u89E3\u5305 Linux \u8FD0\u884C\u65F6\u2026");
+                TarGz.wipe(rootfs);
+                if (!rootfs.isDirectory() && !rootfs.mkdirs()) {
+                    runtimeError = "cannot create " + rootfs;
+                    return false;
+                }
+                extractAsset("runtime/rootfs.tar.gz", rootfs);
+                if (!rootMarker.createNewFile()) {
+                    runtimeError = "cannot write marker";
+                    return false;
+                }
+                Log.i(TAG, "ensureRuntime: rootfs ok");
             }
-            extractAsset("runtime/rootfs.tar.gz", rootfs);
-            File opt = new File(rootfs, "opt");
-            if (!opt.exists() && !opt.mkdirs()) {
-                return false;
+            if (!codeMarker.isFile()) {
+                Log.i(TAG, "ensureRuntime: extracting vscode");
+                uiStatus("\u6B63\u5728\u89E3\u5305 VS Code\u2026");
+                File opt = new File(rootfs, "opt");
+                TarGz.wipe(opt);
+                if (!opt.isDirectory() && !opt.mkdirs()) {
+                    runtimeError = "cannot create " + opt;
+                    return false;
+                }
+                extractAsset("runtime/vscode.tar.gz", opt);
+                if (!codeMarker.createNewFile()) {
+                    runtimeError = "cannot write marker";
+                    return false;
+                }
+                Log.i(TAG, "ensureRuntime: vscode ok");
             }
-            extractAsset("runtime/vscode.tar.gz", opt);
             mkdirs(new File(rootfs, "root/workspace"));
             mkdirs(new File(rootfs, "root/.vscode-server"));
             mkdirs(new File(rootfs, "tmp"));
@@ -522,10 +550,10 @@ public class MainActivity extends Activity {
             mkdirs(new File(rootfs, "proc"));
             mkdirs(new File(rootfs, "sys"));
             mkdirs(new File(files, "tmp"));
-            new File(rootfs, ".ok").createNewFile();
             return true;
         } catch (Throwable t) {
             Log.e(TAG, "ensureRuntime", t);
+            runtimeError = String.valueOf(t);
             return false;
         }
     }
