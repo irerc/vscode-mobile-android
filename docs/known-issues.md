@@ -57,6 +57,8 @@
 | 容器 seccomp | `chroot` 仅首次可用，之后 `Function not implemented`；改用 loader 直跑 |
 | 依赖校验 | jar 必须验证确实含 `.class`（`unzip -Z1 x.jar | grep -c "\.class$"`），0 个即为 metadata-only 包，不能喂给 d8 |
 
+- **git 推送通道**：曾经只能走本地 CONNECT 代理（`gh-proxy.mjs`，`-c http.proxy=http://127.0.0.1:7891` +  `-c http.version=HTTP/1.1`），代理会间歇返回 502 / `GnuTLS recv error (-110)` / `Proxy CONNECT aborted`。2026-11-15 实测**直连 `api.github.com` 与 `github.com` 已可用**（HTTP 200，`git push` 成功 `b69d2e2..2747d4e`），代理不再是必需项。代理也不总是可靠：若再遇 502，先试直连，再考虑重启代理。
+
 ## 四、待真机验证项
 
 - [ ] 首次启动解包 110MB 资源的实际耗时与内存峰值
