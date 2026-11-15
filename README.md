@@ -2,18 +2,24 @@
 
 把完整的桌面版 **VS Code** 装进一个安卓 APK：**即装即用，不依赖手机上的浏览器、不依赖容器、不需要联网**。
 
-[![Release](https://img.shields.io/badge/release-v1.0.10--l-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.10-l)
+[![Release](https://img.shields.io/badge/release-v1.0.14--l-blue)](https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.14-l)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.144.0-007ACC)](https://code.visualstudio.com/)
 [![GeckoView](https://img.shields.io/badge/GeckoView-159-orange)](https://mozilla.github.io/geckoview/)
 [![Android](https://img.shields.io/badge/Android-8.0%2B%20(arm64)-green)]()
 
 ## 直接下载
 
-**vscode-mobile.apk** · 206,485,963 字节（约 197 MB） · MD5 `f8bb77f936051cd82fa8040220a7c1ec` · SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c` · versionCode 27 / `1.0.13-l`
+**vscode-mobile-1.0.14-l.apk** · 206,485,963 字节（约 197 MB） · MD5 `77758dbcd1b42094093919931e92dc60` · SHA-256 `c3d78a0654345bcff2fe356e7364de9554de6ac73496ffcfdab5b09b7358dc90` · versionCode 28 / `1.0.14-l`
 
-本版修掉的真机崩溃链共五处，全部有 logcat 或本地复跑证据：dex 缺 Kotlin 运行时、库 `R$*` 常量类缺失、KMP metadata 空包导致 `androidx.collection.SimpleArrayMap` 不在 dex（`GeckoAppShell.<clinit>` 崩溃）、`TarGz` 把绝对软链误判为路径逃逸导致解包中止（`IOException: escape etc/alternatives/pager`）、`vscode.tar.gz` 缺 `@vscode/deviceid` 与 `@github/copilot-sdk`。详见 `docs/known-issues.md` 第 15–21 条。
+发布页：<https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.14-l>（资产 id 745653765，GitHub 侧回读的 sha256 与上表一致；该版本标为 prerelease，因为最后一步「肉眼确认工作台渲染」仍待设备识屏可用时补证）。
+
+本版在上一版基础上再修两处：新增 APK 与解包器的一键复核脚本（`tools/verify_apk.sh`、`tools/test_extract.sh`），并把 `SELFTEST` 日志探针与 `FLAG_KEEP_SCREEN_ON` 打进应用。累计修掉的真机崩溃链共五处，全部有 logcat 或本地复跑证据：dex 缺 Kotlin 运行时、库 `R$*` 常量类缺失、KMP metadata 空包导致 `androidx.collection.SimpleArrayMap` 不在 dex（`GeckoAppShell.<clinit>` 崩溃）、`TarGz` 把绝对软链误判为路径逃逸导致解包中止（`IOException: escape etc/alternatives/pager`）、`vscode.tar.gz` 缺 `@vscode/deviceid` 与 `@github/copilot-sdk`。详见 `docs/known-issues.md` 第 15–21 条。
 
 > 真机进度（Xiaomi / Android 17 / SDK 37）：安装成功 → 启动**不再闪退** → GeckoView 起 `sandboxed_tab` 内容进程 → 运行时解包完成 → `libproot.so`+`node` 起 `serve-web` → `127.0.0.1:8800` 处于 LISTEN 且已有 GeckoView 连接。剩余一项待肉眼确认：工作台是否完整渲染（设备识屏关闭，无法读屏自证）。验收清单见 `docs/README.md` 第七节。
+
+> 关于「直接用正常的 Linux 版 VS Code」：已在同架构同 glibc 的 Ubuntu 容器里实测**桌面版 Electron VS Code**（1.146.0 arm64 deb）——窗口能建，但 GPU 子进程 `exit_code=4`（SIGILL）两次后 Chromium 直接 `GPU process isn't usable. Goodbye`；改成 `--in-process-gpu` 则主进程自身收到 `Illegal instruction`。这是 proot 的 syscall 转发与 Chromium GPU 初始化路径不兼容，**桌面版走不通**，而 `serve-web`（纯 Node）在同环境完全正常。故本项目采用「Node 服务 + 客户端渲染」，与官方 `code-server` 同构。详见 `docs/known-issues.md` 第 22 条。
+
+> 你反馈的三项界面问题（中文显示成方块/乱码、界面错位显示不全、扩展市场搜不到，以及缺少欢迎页、要求把设置移出主界面并默认全屏）是下一轮的工作面。已先排除两项结构性猜测：rootfs 的 DNS 配置（`8.8.8.8`/`1.1.1.1`/`223.5.5.5` + `hosts: files dns`）与根证书（123 个证书 + 完整 bundle）都正常，市场问题真因尚需应用运行时的 logcat 证据。
 
 安装时需允许「安装未知来源应用」。装完点开图标即可，首次启动会自解包（约 1–2 分钟），之后冷启动数秒。
 
