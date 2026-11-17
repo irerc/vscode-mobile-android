@@ -35,6 +35,24 @@ DEPS="$APP_DIR/libs/runtime-deps-clean"
 
 export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
+# Same PRoot stub-loader flakiness as the link stage below: any child exec can
+# die with "[proroot-stub-loader] stack build failed =7" (exit 125) and succeed
+# on retry. Wrap every aapt2 call so one flake does not poison the flat dir.
+aapt2_retry() {
+  _try=0
+  while :; do
+    _try=$((_try + 1))
+    set +e
+    "$BT/aapt2" "$@"
+    _rc=$?
+    set -e
+    [ "$_rc" -eq 0 ] && return 0
+    [ "$_try" -ge 5 ] && { echo "FATAL: aapt2 $* rc=$_rc after $_try tries"; exit 1; }
+    echo "  aapt2 $* rc=$_rc, retry $_try/5"
+    sleep 3
+  done
+}
+
 echo "== 0/6 checks =="
 [ -f "$APP_DIR/jni/arm64-v8a/libxul.so" ] || { echo "FATAL: native libs missing"; exit 1; }
 [ -f "$APP_DIR/assets/runtime/vscode.tar.gz" ] || { echo "FATAL: assets missing"; exit 1; }
@@ -125,7 +143,7 @@ rm -rf "$B"
 mkdir -p "$B/flat" "$B/gen" "$B/classes" "$B/dex" "$B/src" "$OUT"
 
 echo "== 1/6 aapt2 compile =="
-"$BT/aapt2" compile --dir "$APP_DIR/src/main/res" -o "$B/flat/"
+aapt2_retry compile --dir "$APP_DIR/src/main/res" -o "$B/flat/"
 
 # Library resources + library R classes.
 #
@@ -169,7 +187,7 @@ for pair in "${LIBAARS[@]}"; do
   mkdir -p "$d" "$B/flatlib/$LIDX"
   unzip -o -q "$aar" 'res/*' -d "$d" || true
   if [ -d "$d/res" ]; then
-    "$BT/aapt2" compile --dir "$d/res" -o "$B/flatlib/$LIDX/" || { echo "FATAL: aapt2 compile failed for $aar"; exit 1; }
+    aapt2_retry compile --dir "$d/res" -o "$B/flatlib/$LIDX/"
   fi
   EXTRAPKGS+=("$pkg")
   LIDX=$((LIDX + 1))
@@ -177,6 +195,15 @@ done
 echo "library packages: ${#EXTRAPKGS[@]}"
 
 echo "== 2/6 aapt2 link (L, vc 24) =="
+# This environment's PRoot stub loader intermittently aborts a child exec with
+# "[proroot-stub-loader] stack build failed =7" (exit 125). The very same command
+# succeeds on retry, and it is not argv size or memory: a 256-input link failed
+# three times in a row inside this script while the identical command run by hand
+# went through. Retry the link a few times instead of losing a whole build.
+LINK_TRY=0
+while :; do
+LINK_TRY=$((LINK_TRY + 1))
+set +e
 "$BT/aapt2" link \
   -o "$B/baseL.apk" \
   -I "$PLATFORM" \
@@ -186,6 +213,18 @@ echo "== 2/6 aapt2 link (L, vc 24) =="
   --version-code 28 --version-name "1.0.14-l" \
   --auto-add-overlay \
   "$B/flat"/*.flat "$B/flatlib"/*/*.flat
+LINK_RC=$?
+set -e
+if [ "$LINK_RC" -eq 0 ] && [ -s "$B/baseL.apk" ]; then
+  break
+fi
+if [ "$LINK_TRY" -ge 5 ]; then
+  echo "FATAL: aapt2 link failed rc=$LINK_RC after $LINK_TRY attempts"
+  exit 1
+fi
+echo "  aapt2 link rc=$LINK_RC, retry $LINK_TRY/5"
+sleep 3
+done
 ls -l "$B/baseL.apk"
 
 # aapt2 link cannot emit one R per library package: its --extra-packages takes a

@@ -75,6 +75,12 @@
             </intent-filter>
 
         </activity>
+        <activity android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="设置"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density|fontScale"
+            android:windowSoftInputMode="adjustResize">
+        </activity>
         <service
             android:name="org.mozilla.gecko.crashhelper.CrashHelper"
             android:enabled="true"

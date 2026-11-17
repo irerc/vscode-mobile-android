@@ -129,6 +129,60 @@ public class MainActivity extends Activity {
         }, "bootstrap").start();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        applyImmersive();
+        try {
+            String pending = prefs().getString(SettingsActivity.KEY_PENDING, null);
+            if (pending != null) {
+                prefs().edit().remove(SettingsActivity.KEY_PENDING).apply();
+                if (SettingsActivity.ACT_WIPE.equals(pending)) {
+                    wipeAndRestart();
+                } else if (SettingsActivity.ACT_RESTART.equals(pending)) {
+                    restartServer();
+                }
+            } else {
+                String saved = prefs().getString(KEY_URL, SERVER_URL);
+                if (saved != null && !saved.equals(baseUrl)) {
+                    baseUrl = saved;
+                    if (session != null) {
+                        session.loadUri(baseUrl);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "onResume", t);
+        }
+    }
+
+    private void restartServer() {
+        overlay.setVisibility(View.VISIBLE);
+        uiStatus("\u6B63\u5728\u91CD\u542F\u670D\u52A1\u2026");
+        new Thread(new Runnable() {
+            public void run() {
+                stopServer();
+                bootstrap();
+            }
+        }, "restart").start();
+    }
+
+    private void wipeAndRestart() {
+        overlay.setVisibility(View.VISIBLE);
+        uiStatus("\u6B63\u5728\u6E05\u7406\u8FD0\u884C\u65F6\u2026");
+        new Thread(new Runnable() {
+            public void run() {
+                stopServer();
+                try {
+                    deleteTree(runtimeDir());
+                } catch (Throwable t) {
+                    Log.e(TAG, "wipe", t);
+                }
+                bootstrap();
+            }
+        }, "wipe").start();
+    }
+
     private void reportFatal(final String where, Throwable t) {
         StringWriter sw = new StringWriter();
         sw.write("[" + where + "]");
@@ -206,69 +260,15 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- UI ----
 
     private void buildUi() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        // 主界面只有工作台本身。原先顶部那排 ‹ › ↻ ⌂ ⚙ 会在窄屏上吃掉约
+        // 40dp 并把 VS Code 自己的标题栏挤下去，用户反馈「界面错位 / 显示不
+        // 全」有它一份。导航键交给系统返回手势，设置搬进 SettingsActivity，
+        // 这里只留一个几乎透明的齿轮热区供进入。
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(30, 30, 30));
 
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(Color.rgb(45, 45, 45));
-        bar.setPadding(dp(2), dp(2), dp(2), dp(2));
-
-        bar.addView(toolButton("\u2039", new View.OnClickListener() {
-            public void onClick(View v) {
-                if (session != null) {
-                    session.goBack();
-                }
-            }
-        }));
-        bar.addView(toolButton("\u203A", new View.OnClickListener() {
-            public void onClick(View v) {
-                if (session != null) {
-                    session.goForward();
-                }
-            }
-        }));
-        bar.addView(toolButton("\u21BB", new View.OnClickListener() {
-            public void onClick(View v) {
-                if (session != null) {
-                    session.reload();
-                }
-            }
-        }));
-        bar.addView(toolButton("\u2302", new View.OnClickListener() {
-            public void onClick(View v) {
-                if (session != null) {
-                    session.loadUri(baseUrl);
-                }
-            }
-        }));
-        bar.addView(toolButton("\u2699", new View.OnClickListener() {
-            public void onClick(View v) {
-                showServerDialog();
-            }
-        }));
-
-        TextView title = new TextView(this);
-        title.setText("VS Code");
-        title.setTextColor(Color.rgb(180, 180, 180));
-        title.setTextSize(12);
-        title.setPadding(dp(8), 0, 0, 0);
-        bar.addView(title);
-
-        root.addView(bar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        progress.setMax(100);
-        progress.setProgress(0);
-        root.addView(progress, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
-
-        FrameLayout content = new FrameLayout(this);
         geckoView = new GeckoView(this);
-        content.addView(geckoView, new FrameLayout.LayoutParams(
+        root.addView(geckoView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         overlay = new LinearLayout(this);
@@ -290,7 +290,7 @@ public class MainActivity extends Activity {
         overlay.addView(spinner, sp);
 
         statusText = new TextView(this);
-        statusText.setText("正在准备运行时\u2026");
+        statusText.setText("\u6B63\u5728\u51C6\u5907\u8FD0\u884C\u65F6\u2026");
         statusText.setTextColor(Color.rgb(200, 200, 200));
         statusText.setTextSize(13);
         statusText.setGravity(Gravity.CENTER);
@@ -326,23 +326,77 @@ public class MainActivity extends Activity {
         errorPanel.addView(retry);
 
         Button cfg = new Button(this);
-        cfg.setText("\u670D\u52A1\u5668\u5730\u5740");
+        cfg.setText("\u8BBE\u7F6E");
         cfg.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                showServerDialog();
+                openSettings();
             }
         });
         errorPanel.addView(cfg);
 
         overlay.addView(errorPanel);
 
-        content.addView(overlay, new FrameLayout.LayoutParams(
+        root.addView(overlay, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        root.addView(content, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        // 细进度条贴在顶边，只有 3dp，不占布局高度，也不会把工作台推下去。
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setMax(100);
+        progress.setProgress(0);
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(3));
+        plp.gravity = Gravity.TOP;
+        root.addView(progress, plp);
+
+        // 齿轮：贴右上角、半透明、40dp。VS Code 自己那一带是标题栏空白区，
+        // 压在它上面不会挡住可编辑内容。
+        Button gear = new Button(this);
+        gear.setText("\u2699");
+        gear.setTextSize(15);
+        gear.setTextColor(Color.rgb(210, 210, 210));
+        gear.setAlpha(0.32f);
+        gear.setBackgroundColor(Color.TRANSPARENT);
+        gear.setPadding(0, 0, 0, 0);
+        gear.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                openSettings();
+            }
+        });
+        FrameLayout.LayoutParams glp = new FrameLayout.LayoutParams(dp(40), dp(40));
+        glp.gravity = Gravity.TOP | Gravity.END;
+        glp.topMargin = dp(2);
+        glp.rightMargin = dp(2);
+        root.addView(gear, glp);
 
         setContentView(root);
+        applyImmersive();
+    }
+
+    private void openSettings() {
+        try {
+            startActivity(new android.content.Intent(this, SettingsActivity.class));
+        } catch (Throwable t) {
+            Log.e(TAG, "openSettings", t);
+        }
+    }
+
+    /**
+     * 真全屏：把状态栏与导航栏都隐藏。targetSdk 28 用旧的 systemUiVisibility
+     * 就够了（immersive sticky 在新系统上仍有效），不引入 WindowInsetsController
+     * 以免在 26 上不可用。
+     */
+    private void applyImmersive() {
+        try {
+            View d = getWindow().getDecorView();
+            d.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } catch (Throwable t) {
+            Log.e(TAG, "applyImmersive", t);
+        }
     }
 
     private Button toolButton(String label, View.OnClickListener l) {
@@ -608,7 +662,9 @@ public class MainActivity extends Activity {
                     "--accept-server-license-terms",
                     "--disable-telemetry",
                     "--server-data-dir", "/root/.vscode-server",
-                    "--default-folder", "/root/workspace"
+                    // 不再传 --default-folder：强制打开一个目录会让全新安装
+                    // 跳过 Welcome 页，而用户要的正是「像正常全新安装那样」。
+
             };
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
@@ -779,6 +835,62 @@ public class MainActivity extends Activity {
             if (c != null) {
                 c.disconnect();
             }
+        }
+    }
+
+    private File runtimeDir() {
+        return new File(getFilesDir(), "rootfs");
+    }
+
+    /** 结束服务进程。startServer 带 --kill-on-exit，父进程死掉子树会跟着退。 */
+    private void stopServer() {
+        Process p = sServer;
+        sServer = null;
+        if (p == null) {
+            return;
+        }
+        try {
+            p.destroy();
+            for (int i = 0; i < 30 && p.isAlive(); i++) {
+                Thread.sleep(100);
+            }
+            if (p.isAlive()) {
+                p.destroyForcibly();
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "stopServer", t);
+        }
+    }
+
+    /** 递归删除，绝不跟随软链（rootfs 里到处都是绝对软链）。 */
+    private static void deleteTree(File f) {
+        if (f == null || !f.exists()) {
+            return;
+        }
+        try {
+            if (f.isDirectory() && !isSymlink(f)) {
+                File[] kids = f.listFiles();
+                if (kids != null) {
+                    for (File k : kids) {
+                        deleteTree(k);
+                    }
+                }
+            }
+            f.delete();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean isSymlink(File f) {
+        try {
+            File p = f.getParentFile();
+            if (p == null) {
+                return false;
+            }
+            File canon = new File(p.getCanonicalFile(), f.getName());
+            return !canon.getCanonicalFile().equals(canon.getAbsoluteFile());
+        } catch (Throwable t) {
+            return false;
         }
     }
 
