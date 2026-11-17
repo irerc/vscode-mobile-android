@@ -17,3 +17,4 @@ config.env.bak
 
 # 本地临时校验/发布脚本（仅容器内使用，不入库）
 /.chk/
+*.conflict-*.md
