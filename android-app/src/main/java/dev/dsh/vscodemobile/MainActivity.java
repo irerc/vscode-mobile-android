@@ -525,6 +525,237 @@ public class MainActivity extends Activity {
 
     // ----------------------------------------------------------- bootstrap ---
 
+    // A device that shows nothing is indistinguishable from a device that works
+    // when you cannot look at the screen. This writes a report into the app's
+    // external files dir, once per packaging version, so a launch can be audited
+    // from `adb shell cat` alone: guest resolv.conf, the shipped CSS patch, the
+    // seeded settings file, the workbench HTTP response, and a real
+    // `code-server --install-extension` run inside PRoot (the check that used to
+    // die on vsce-sign). Every step is best-effort; the file always gets written.
+    private void maybeRunSelfTest(final String baseUrl) {
+        final File done = new File(getFilesDir(), ".selftest-" + versionStamp());
+        if (done.isFile()) {
+            return;
+        }
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                StringBuilder sb = new StringBuilder();
+                try {
+                    File files = getFilesDir();
+                    File rootfs = new File(files, "rootfs");
+                    sb.append("selftest versionCode=").append(versionStamp())
+                            .append(" device=").append(android.os.Build.MANUFACTURER).append('/')
+                            .append(android.os.Build.MODEL).append(" sdk=").append(android.os.Build.VERSION.SDK_INT)
+                            .append(" at=").append(System.currentTimeMillis()).append('\n');
+                    sb.append("[resolv.conf]\n").append(readHead(new File(rootfs, "etc/resolv.conf"), 6));
+                    sb.append("[settings.json]\n")
+                            .append(readHead(new File(rootfs, "root/.vscode-server/data/User/settings.json"), 6));
+                    File css = new File(rootfs, "opt/vscode/out/vs/code/browser/workbench/workbench.css");
+                    sb.append("[workbench.css] exists=").append(css.isFile())
+                            .append(" bytes=").append(css.length())
+                            .append(" patchHits=").append(countIn(css, "sans-serif!important")).append('\n');
+                    sb.append("[http] ").append(describeGet(baseUrl)).append('\n');
+                    sb.append("[install] ").append(installOneExtension(rootfs)).append('\n');
+                } catch (Throwable tr) {
+                    sb.append("[selftest error] ").append(tr).append('\n');
+                }
+                String report = sb.toString();
+                Log.i(TAG, "selftest\n" + report);
+                File out = getExternalFilesDir(null);
+                if (out == null) {
+                    out = getFilesDir();
+                }
+                OutputStream os = null;
+                try {
+                    os = new FileOutputStream(new File(out, "selftest.txt"));
+                    os.write(report.getBytes("UTF-8"));
+                } catch (Throwable tr) {
+                    Log.w(TAG, "selftest write", tr);
+                } finally {
+                    if (os != null) {
+                        try {
+                            os.close();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+                try {
+                    done.createNewFile();
+                } catch (Throwable ignored) {
+                }
+            }
+        }, "selftest");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private String readHead(File f, int lines) {
+        if (!f.isFile()) {
+            return "(missing " + f + ")\n";
+        }
+        InputStream in = null;
+        StringBuilder sb = new StringBuilder();
+        try {
+            in = new FileInputStream(f);
+            BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+            String line;
+            int n = 0;
+            while (n < lines && (line = r.readLine()) != null) {
+                sb.append("  ").append(line).append('\n');
+                n++;
+            }
+        } catch (Throwable t) {
+            sb.append("(read error ").append(t).append(")\n");
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private int countIn(File f, String needle) {
+        if (!f.isFile()) {
+            return -1;
+        }
+        InputStream in = null;
+        try {
+            in = new FileInputStream(f);
+            byte[] buf = new byte[64 * 1024];
+            byte[] nb = needle.getBytes("UTF-8");
+            int hits = 0;
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                for (int i = 0; i + nb.length <= n; i++) {
+                    boolean hit = true;
+                    for (int j = 0; j < nb.length; j++) {
+                        if (buf[i + j] != nb[j]) {
+                            hit = false;
+                            break;
+                        }
+                    }
+                    if (hit) {
+                        hits++;
+                    }
+                }
+            }
+            return hits;
+        } catch (Throwable t) {
+            return -2;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
+    private String describeGet(String baseUrl) {
+        HttpURLConnection c = null;
+        InputStream in = null;
+        try {
+            c = (HttpURLConnection) new URL(baseUrl).openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(15000);
+            int code = c.getResponseCode();
+            in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            byte[] buf = new byte[8192];
+            int total = 0;
+            StringBuilder head = new StringBuilder();
+            int n;
+            while ((n = in == null ? -1 : in.read(buf)) > 0) {
+                total += n;
+                if (head.length() < 2000) {
+                    head.append(new String(buf, 0, n, "UTF-8"));
+                }
+            }
+            String h = head.toString().toLowerCase();
+            return "code=" + code + " bytes=" + total
+                    + " workbench=" + h.contains("workbench")
+                    + " css=" + h.contains("workbench.css");
+        } catch (Throwable t) {
+            return "error=" + t;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    private String installOneExtension(File rootfs) {
+        File files = getFilesDir();
+        String nativeDir = getApplicationInfo().nativeLibraryDir;
+        String[] cmd = new String[]{
+                nativeDir + "/libproot.so",
+                "--kill-on-exit",
+                "-r", files + "/rootfs",
+                "-0",
+                "-b", "/dev",
+                "-b", "/proc",
+                "-b", "/sys",
+                "-b", "/system",
+                "-b", "/apex",
+                "-b", "/vendor",
+                "-w", "/root",
+                "/opt/vscode/bin/code-server",
+                "--install-extension", "ms-python.python",
+                // A scratch dir, not the live one: the server is already running and
+                // watching its own extensions folder, and this probe must not race it.
+                "--extensions-dir", "/root/.selftest-ext",
+        };
+        Process p = null;
+        try {
+            p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            final Process proc = p;
+            ui.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        proc.destroy();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }, 240000);
+            BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
+            StringBuilder tail = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) {
+                Log.i(TAG, "install| " + line);
+                tail.append(line).append('\n');
+                if (tail.length() > 3000) {
+                    tail.delete(0, tail.length() - 3000);
+                }
+            }
+            int rc = p.waitFor();
+            String t = tail.toString().trim();
+            if (t.length() > 700) {
+                t = t.substring(t.length() - 700);
+            }
+            return "exit=" + rc + " tail=" + t.replace("\n", " | ");
+        } catch (Throwable t) {
+            return "error=" + t;
+        } finally {
+            if (p != null) {
+                try {
+                    p.destroy();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private void bootstrap() {
         try {
             if (httpOk(baseUrl)) {
@@ -547,6 +778,7 @@ public class MainActivity extends Activity {
             int waited = 0;
             while (waited < 300) {
                 if (httpOk(baseUrl)) {
+                    maybeRunSelfTest(baseUrl);
                     uiReady();
                     return;
                 }
