@@ -6,7 +6,7 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 206,059,979 字节（约 197 MB），MD5 `d03b1b631d13a9aabdd944fdb838c28e`，SHA-256 `cec6dd908fbd513f832de4e2889c13fd0ffc28399d8aa4aa145dc0b84297c452`（v1.0.16-l / versionCode 30） |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 206,064,075 字节（约 197 MB），MD5 `f4206963da1ce549b6d57d796acf3d56`，SHA-256 `5373a9710903820f63c2380b603935591c7e0b5d28b29438aa65bbd1637778ed`（v1.0.17-l / versionCode 31） |
 | 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 需在每次构建后重新 `cp` 并核对 MD5 |
 | GitHub 发布页 | `irerc/vscode-mobile-android` | 见 Release 页 |
 | APK 源码工程 | `android-app/` | — |

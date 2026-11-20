@@ -6,6 +6,9 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,6 +23,9 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.List;
 import android.widget.Toast;
 
 import org.mozilla.geckoview.GeckoRuntime;
@@ -33,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -566,7 +573,14 @@ public class MainActivity extends Activity {
         File proot = new File(getApplicationInfo().nativeLibraryDir, "libproot.so");
         File rootMarker = new File(rootfs, ".ok-rootfs");
         File codeMarker = new File(rootfs, ".ok-vscode");
-        if (rootMarker.isFile() && codeMarker.isFile() && proot.isFile()) {
+        // The VS Code marker carries the versionCode that produced the tree. An
+        // in-place upgrade therefore replaces the payload instead of silently
+        // keeping the previous one - without this, a user who installs a newer APK
+        // over an older one still runs the old tree and every payload fix looks
+        // like it did nothing. Only the tree is replaced: extensions, settings and
+        // the workspace all live under root/.vscode-server and root/workspace.
+        String stamp = versionStamp();
+        if (rootMarker.isFile() && markerMatches(codeMarker, stamp) && proot.isFile()) {
             return true;
         }
         try {
@@ -582,13 +596,16 @@ public class MainActivity extends Activity {
                     return false;
                 }
                 extractAsset("runtime/rootfs.tar.gz", rootfs);
+                // Deliberately not re-extracted on upgrade: the user's dotfiles,
+                // workspace and toolchains live inside this tree, so replacing it
+                // would throw their work away. Settings offers a deliberate wipe.
                 if (!rootMarker.createNewFile()) {
                     runtimeError = "cannot write marker";
                     return false;
                 }
                 Log.i(TAG, "ensureRuntime: rootfs ok");
             }
-            if (!codeMarker.isFile()) {
+            if (!markerMatches(codeMarker, stamp)) {
                 Log.i(TAG, "ensureRuntime: extracting vscode");
                 uiStatus("\u6B63\u5728\u89E3\u5305 VS Code\u2026");
                 File opt = new File(rootfs, "opt");
@@ -598,7 +615,7 @@ public class MainActivity extends Activity {
                     return false;
                 }
                 extractAsset("runtime/vscode.tar.gz", opt);
-                if (!codeMarker.createNewFile()) {
+                if (!writeMarker(codeMarker, stamp)) {
                     runtimeError = "cannot write marker";
                     return false;
                 }
@@ -616,6 +633,58 @@ public class MainActivity extends Activity {
             Log.e(TAG, "ensureRuntime", t);
             runtimeError = String.valueOf(t);
             return false;
+        }
+    }
+
+    private String versionStamp() {
+        try {
+            return String.valueOf(getPackageManager()
+                    .getPackageInfo(getPackageName(), 0).versionCode);
+        } catch (Throwable t) {
+            Log.w(TAG, "versionStamp", t);
+            return "0";
+        }
+    }
+
+    private boolean markerMatches(File marker, String stamp) {
+        if (!marker.isFile()) {
+            return false;
+        }
+        InputStream in = null;
+        try {
+            in = new FileInputStream(marker);
+            byte[] buf = new byte[32];
+            int n = in.read(buf);
+            return n > 0 && stamp.equals(new String(buf, 0, n, "UTF-8").trim());
+        } catch (Throwable t) {
+            Log.w(TAG, "markerMatches", t);
+            return false;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
+    private boolean writeMarker(File marker, String stamp) {
+        OutputStream os = null;
+        try {
+            os = new FileOutputStream(marker);
+            os.write(stamp.getBytes("UTF-8"));
+            return true;
+        } catch (Throwable t) {
+            Log.w(TAG, "writeMarker", t);
+            return false;
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
@@ -684,12 +753,79 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Resolvers tried after the device's own, in this order, capped at four lines
+    // total. AliDNS and DNSPod resolve from CN networks where the public resolvers
+    // baked into the rootfs are commonly black-holed.
+    private static final String[] FALLBACK_DNS = {"223.5.5.5", "119.29.29.29", "1.1.1.1"};
+
+    // The rootfs ships /etc/resolv.conf with 8.8.8.8 first. On CN carriers and on
+    // plenty of corporate networks UDP 53 to that address is dropped, and the
+    // guest's libc just times out; serve-web resolves the marketplace from inside
+    // the guest, so the visible symptom is an extension view that finds nothing
+    // rather than a network error. Copy what the device is actually using on every
+    // start (it changes with the network) and queue public resolvers behind it.
+    private void writeResolvConf(File rootfs) {
+        List<String> servers = new ArrayList<String>();
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm != null) {
+                Network net = cm.getActiveNetwork();
+                LinkProperties lp = net == null ? null : cm.getLinkProperties(net);
+                if (lp != null) {
+                    for (InetAddress a : lp.getDnsServers()) {
+                        String h = a == null ? null : a.getHostAddress();
+                        if (h != null && h.indexOf(':') < 0 && !servers.contains(h)) {
+                            servers.add(h);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "writeResolvConf: cannot read the device DNS", t);
+        }
+        if (servers.isEmpty()) {
+            Log.w(TAG, "writeResolvConf: device reports no IPv4 DNS, keeping the rootfs file");
+            return;
+        }
+        for (int i = 0; i < FALLBACK_DNS.length && servers.size() < 4; i++) {
+            if (!servers.contains(FALLBACK_DNS[i])) {
+                servers.add(FALLBACK_DNS[i]);
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < servers.size(); i++) {
+            sb.append("nameserver ").append(servers.get(i)).append('\n');
+        }
+        sb.append("options timeout:2 attempts:2\n");
+        File etc = new File(rootfs, "etc");
+        if (!etc.isDirectory() && !etc.mkdirs() && !etc.isDirectory()) {
+            Log.w(TAG, "writeResolvConf: cannot create " + etc);
+            return;
+        }
+        OutputStream os = null;
+        try {
+            os = new FileOutputStream(new File(etc, "resolv.conf"));
+            os.write(sb.toString().getBytes("UTF-8"));
+            Log.i(TAG, "writeResolvConf: " + servers);
+        } catch (Throwable t) {
+            Log.w(TAG, "writeResolvConf", t);
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private Process startServer() {
         try {
             String files = getFilesDir().getAbsolutePath();
             String nativeDir = getApplicationInfo().nativeLibraryDir;
             File tmp = new File(files, "tmp");
             tmp.mkdirs();
+            writeResolvConf(new File(files, "rootfs"));
             seedUserSettings(new File(files, "rootfs"));
             String[] cmd = new String[]{
                     nativeDir + "/libproot.so",
