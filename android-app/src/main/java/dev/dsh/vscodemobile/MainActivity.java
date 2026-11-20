@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
@@ -636,12 +637,61 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Written once, before the server starts, and never touched again: if the user
+    // later edits settings.json in the app we leave their file alone.
+    //
+    // Two defaults, both for problems that cannot be fixed any other way:
+    //
+    // * extensions.verifySignature=false - serve-web shells out to vsce-sign, a
+    //   16 MB .NET single-file binary, to check a VSIX signature. Under PRoot it
+    //   dies with exit 137 ("Internal Code: 137" in the server log), so every
+    //   install ends in "Signature verification failed". VSIX downloads still go
+    //   over TLS to the official marketplace; this only skips the local check.
+    // * The font stacks end with a generic sans-serif. Android's monospace family
+    //   has no CJK glyphs, and the CJK fallback names in Gecko's greprefs
+    //   ("Noto Sans CJK SC", "MiSans", ...) do not match how AOSP hangs CJK off
+    //   sans-serif, so editor and terminal text rendered as empty boxes. Adding
+    //   the generic family lets Gecko's per-glyph fallback find the system CJK
+    //   faces.
+    private void seedUserSettings(File rootfs) {
+        File user = new File(rootfs, "root/.vscode-server/data/User");
+        File json = new File(user, "settings.json");
+        if (json.isFile()) {
+            return;
+        }
+        if (!user.isDirectory() && !user.mkdirs() && !user.isDirectory()) {
+            Log.w(TAG, "seedUserSettings: cannot create " + user);
+            return;
+        }
+        String body = "{\n"
+                + "    \"extensions.verifySignature\": false,\n"
+                + "    \"editor.fontFamily\": \"'Droid Sans Mono', monospace, sans-serif\",\n"
+                + "    \"terminal.integrated.fontFamily\": \"monospace, sans-serif\"\n"
+                + "}\n";
+        OutputStream os = null;
+        try {
+            os = new FileOutputStream(json);
+            os.write(body.getBytes("UTF-8"));
+            Log.i(TAG, "seedUserSettings: wrote " + json);
+        } catch (Throwable t) {
+            Log.w(TAG, "seedUserSettings", t);
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private Process startServer() {
         try {
             String files = getFilesDir().getAbsolutePath();
             String nativeDir = getApplicationInfo().nativeLibraryDir;
             File tmp = new File(files, "tmp");
             tmp.mkdirs();
+            seedUserSettings(new File(files, "rootfs"));
             String[] cmd = new String[]{
                     nativeDir + "/libproot.so",
                     "--kill-on-exit",

@@ -129,6 +129,9 @@ public final class TarGz {
                 copyFile(new File(destDir, link), out);
                 skipFully(gz, size);
                 skipPad(gz, size);
+                if ((mode & 0111) != 0) {
+                    out.setExecutable(true, false);
+                }
                 count++;
                 continue;
             }
@@ -165,7 +168,6 @@ public final class TarGz {
             }
             deleteIfLink(out);
             symlink(l[1], out);
-            count++;
         }
         return count;
     }

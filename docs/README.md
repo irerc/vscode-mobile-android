@@ -6,7 +6,7 @@
 
 | 产物 | 路径 | 大小 |
 |---|---|---|
-| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 206,485,963 字节（约 197 MB），MD5 `f8bb77f936051cd82fa8040220a7c1ec`，SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c`（v1.0.13-l / versionCode 27） |
+| 安装包（已签名，可直接安装） | `dist/vscode-mobile-L.apk` | 206,490,059 字节（约 197 MB），MD5 `7b9cfc000bb8b6ce1c5e554fff11241a`，SHA-256 `0a16c561bdadf7724b48e77dbdb6b9250e7d996b5e879785829a7c04321231ef`（v1.0.15-l / versionCode 29） |
 | 手机侧副本（可直接点开安装） | `/sdcard/Download/vscode-mobile-L.apk` | 需在每次构建后重新 `cp` 并核对 MD5 |
 | GitHub 发布页 | `irerc/vscode-mobile-android` | 见 Release 页 |
 | APK 源码工程 | `android-app/` | — |
@@ -112,14 +112,14 @@ bash android-app/tools/test_extract.sh android-app
 
 ## 六、验证记录（历史）
 
-**v1.0.13-l（versionCode 27，当前产物）的静态 + 真机验证**
+**v1.0.13-l（versionCode 27，历史产物、未发布）的静态 + 真机验证**
 
 - `apksigner verify` → v1/v2/v3 全部通过；`zipalign -c -P 16 4` 通过。
 - `aapt2 dump badging` → `dev.dsh.vscodemobile`，`minSdk=26`，`targetSdk=28`。
 - dex 关键类门禁（构建脚本内 `FATAL` 级）：`kotlin/jvm/internal/Intrinsics`、`kotlinx/coroutines/Dispatchers`、`androidx/media3/extractor/DefaultExtractorsFactory`、`com/google/android/gms/common/api/Api`、`androidx/lifecycle/runtime/R$id`、`androidx/startup/R$string` 全部命中。
 - 库 R 类实测进 dex：`androidx.fragment.R$id/$animator/$styleable`、`org.mozilla.geckoview.R$drawable`、`com.google.android.gms.base.R$string/$styleable`、`androidx.media3.exoplayer.R$string`、`androidx.core.R$id/$string`、`androidx.activity.R$id`、`androidx.lifecycle.runtime.R$id`。
 - R8 `--dontshrink` 全量缺失类审计 → 剩余 59 条全部是 `android.*` / `java.*` / `javax.*` / `libcore.*` 框架桩或 `org.checkerframework`、`org.jspecify` 等纯注解类型，无实际类型缺失。
-- APK 206,485,963 字节，MD5 `f8bb77f936051cd82fa8040220a7c1ec`，SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c`。
+- APK 206,485,963 字节，MD5 `f8bb77f936051cd82fa8040220a7c1ec`，SHA-256 `e09b8062482e8e860e5de6969c711d35fc774bdd28d001a8cfe9a969d882087c`（v1.0.13-l 的历史指纹，保留备查）。
 - 依赖闭包门禁：`tools/fetch_deps.sh` 尾部对 `libs/` 下每个 classes jar 数 `.class` 条目，任何一个是 0 立即失败——这条门禁正是用来抓住 KMP metadata 空包的（`collection-1.6.0.jar` / `annotation-1.11.0.jar` / `lifecycle-common-2.11.0.jar` / `lifecycle-runtime-2.11.0.aar` 全部为 0）。
 - dex 新增门禁 `androidx/collection/SimpleArrayMap`（命中 8 处），这是上一版真机崩溃 `GeckoAppShell.<clinit>` 的直接元凶。
 - 解包器回归：`TarGz` 改为「单遍流式 + 软链延后创建」，rootfs 里的 `etc/alternatives/* → /usr/bin/*` 绝对软链不再被判为路径逃逸；`ensureRuntime` 分阶段 marker（`.ok-rootfs` / `.ok-vscode`）。
