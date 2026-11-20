@@ -4,13 +4,16 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
@@ -29,11 +32,13 @@ import java.util.ArrayList;
 import java.util.List;
 import android.widget.Toast;
 
+import org.mozilla.geckoview.GeckoResult;
 import org.mozilla.geckoview.GeckoRuntime;
 import org.mozilla.geckoview.GeckoRuntimeSettings;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.GeckoSessionSettings;
 import org.mozilla.geckoview.GeckoView;
+import org.mozilla.geckoview.WebResponse;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -487,6 +492,23 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Web pages can ask for a local file (VS Code's "Install from VSIX" and
+        // "Open File" both do) and can hand back a download. Without these two
+        // delegates GeckoView silently drops both, which looks like a dead button.
+        session.setPromptDelegate(new GeckoSession.PromptDelegate() {
+            @Override
+            public GeckoResult<GeckoSession.PromptDelegate.PromptResponse> onFilePrompt(
+                    GeckoSession s, GeckoSession.PromptDelegate.FilePrompt prompt) {
+                return requestFileChoice(prompt);
+            }
+        });
+        session.setContentDelegate(new GeckoSession.ContentDelegate() {
+            @Override
+            public void onExternalResponse(GeckoSession s, WebResponse response) {
+                saveDownload(response);
+            }
+        });
+
         if (sRuntime == null) {
             GeckoRuntimeSettings rs = new GeckoRuntimeSettings.Builder()
                     .javaScriptEnabled(true)
@@ -657,6 +679,224 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.w(TAG, "ensureStoragePermission", t);
         }
+    }
+
+    private static final int REQ_FILE_PROMPT = 8;
+    private GeckoResult<GeckoSession.PromptDelegate.PromptResponse> filePromptResult;
+    private GeckoSession.PromptDelegate.FilePrompt filePrompt;
+
+    /**
+     * Turn a GeckoView file prompt into an Android document picker. The reply has
+     * to survive the activity round trip, so the pending prompt and its GeckoResult
+     * are parked in fields; onActivityResult finishes whichever one is still open.
+     */
+    private GeckoResult<GeckoSession.PromptDelegate.PromptResponse> requestFileChoice(
+            GeckoSession.PromptDelegate.FilePrompt prompt) {
+        if (filePrompt != null || filePromptResult != null) {
+            finishFilePrompt(null);
+        }
+        final GeckoResult<GeckoSession.PromptDelegate.PromptResponse> reply = new GeckoResult<>();
+        filePrompt = prompt;
+        filePromptResult = reply;
+
+        boolean multiple = prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE;
+        String mime = "*/*";
+        if (prompt.mimeTypes != null && prompt.mimeTypes.length > 0
+                && prompt.mimeTypes[0] != null && prompt.mimeTypes[0].length() > 0) {
+            mime = prompt.mimeTypes[0];
+        }
+        Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.setType(mime);
+        if (multiple) {
+            pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        }
+        try {
+            startActivityForResult(Intent.createChooser(pick, "\u9009\u62E9\u6587\u4EF6"),
+                    REQ_FILE_PROMPT);
+        } catch (Throwable t) {
+            // No document picker on the device: do not leave the page waiting.
+            Log.w(TAG, "no activity for file prompt: " + t);
+            finishFilePrompt(null);
+        }
+        return reply;
+    }
+
+    private void finishFilePrompt(Uri[] uris) {
+        GeckoSession.PromptDelegate.FilePrompt prompt = filePrompt;
+        GeckoResult<GeckoSession.PromptDelegate.PromptResponse> reply = filePromptResult;
+        filePrompt = null;
+        filePromptResult = null;
+        if (prompt == null || reply == null) {
+            return;
+        }
+        GeckoSession.PromptDelegate.PromptResponse response;
+        try {
+            response = (uris != null && uris.length > 0)
+                    ? prompt.confirm(this, uris)
+                    : prompt.dismiss();
+        } catch (Throwable t) {
+            Log.w(TAG, "file prompt failed, dismissing: " + t);
+            response = prompt.dismiss();
+        }
+        reply.complete(response);
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req != REQ_FILE_PROMPT) {
+            return;
+        }
+        List<Uri> picked = new ArrayList<Uri>();
+        if (res == RESULT_OK && data != null) {
+            android.content.ClipData clip = data.getClipData();
+            if (clip != null) {
+                for (int i = 0; i < clip.getItemCount(); i++) {
+                    Uri u = clip.getItemAt(i).getUri();
+                    if (u != null) {
+                        picked.add(u);
+                    }
+                }
+            } else if (data.getData() != null) {
+                picked.add(data.getData());
+            }
+        }
+        finishFilePrompt(picked.toArray(new Uri[picked.size()]));
+    }
+
+    /**
+     * Save a response GeckoView decided not to render. VS Code's web build streams
+     * exports and extension packages this way; dropping them makes the UI look
+     * broken without any error on screen.
+     */
+    private void saveDownload(final WebResponse response) {
+        if (response == null || response.body == null) {
+            return;
+        }
+        final String name = downloadName(response);
+        new Thread(new Runnable() {
+            public void run() {
+                File dir = downloadDir();
+                File out = uniqueFile(dir, name);
+                InputStream in = response.body;
+                FileOutputStream fos = null;
+                long total = 0;
+                try {
+                    fos = new FileOutputStream(out);
+                    byte[] buf = new byte[65536];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        fos.write(buf, 0, n);
+                        total += n;
+                    }
+                    fos.flush();
+                    final String msg = "\u5DF2\u4FDD\u5B58 " + out.getAbsolutePath()
+                            + " (" + total + " B)";
+                    Log.i(TAG, msg);
+                    ui.post(new Runnable() {
+                        public void run() {
+                            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                } catch (Throwable t) {
+                    Log.w(TAG, "download failed: " + t);
+                    final String msg = "\u4E0B\u8F7D\u5931\u8D25: " + t.getMessage();
+                    ui.post(new Runnable() {
+                        public void run() {
+                            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                } finally {
+                    try {
+                        if (fos != null) {
+                            fos.close();
+                        }
+                    } catch (IOException ignored) {
+                    }
+                    try {
+                        in.close();
+                    } catch (IOException ignored) {
+                    }
+                }
+            }
+        }, "download").start();
+    }
+
+    private File downloadDir() {
+        try {
+            File pub = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS);
+            if (pub != null && (pub.isDirectory() || pub.mkdirs())) {
+                return pub;
+            }
+        } catch (Throwable ignored) {
+        }
+        File ext = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (ext != null && (ext.isDirectory() || ext.mkdirs())) {
+            return ext;
+        }
+        File inner = new File(getFilesDir(), "downloads");
+        inner.mkdirs();
+        return inner;
+    }
+
+    private static File uniqueFile(File dir, String name) {
+        File f = new File(dir, name);
+        if (!f.exists()) {
+            return f;
+        }
+        int dot = name.lastIndexOf('.');
+        String stem = dot > 0 ? name.substring(0, dot) : name;
+        String ext = dot > 0 ? name.substring(dot) : "";
+        for (int i = 2; i < 1000; i++) {
+            f = new File(dir, stem + "-" + i + ext);
+            if (!f.exists()) {
+                return f;
+            }
+        }
+        return f;
+    }
+
+    /** Prefer Content-Disposition, then the last path segment, then a timestamp. */
+    private static String downloadName(WebResponse response) {
+        String cd = null;
+        if (response.headers != null) {
+            for (java.util.Map.Entry<String, String> e : response.headers.entrySet()) {
+                if ("content-disposition".equalsIgnoreCase(e.getKey())) {
+                    cd = e.getValue();
+                    break;
+                }
+            }
+        }
+        if (cd != null) {
+            int i = cd.toLowerCase(java.util.Locale.ROOT).indexOf("filename=");
+            if (i >= 0) {
+                String v = cd.substring(i + 9).trim();
+                if (v.startsWith("\"")) {
+                    int end = v.indexOf('"', 1);
+                    v = end > 0 ? v.substring(1, end) : v.substring(1);
+                }
+                v = v.replace('\\', '/');
+                int slash = v.lastIndexOf('/');
+                if (slash >= 0) {
+                    v = v.substring(slash + 1);
+                }
+                if (v.length() > 0 && !v.contains("/")) {
+                    return v;
+                }
+            }
+        }
+        String uri = response.uri == null ? "" : response.uri;
+        int q = uri.indexOf('?');
+        if (q > 0) {
+            uri = uri.substring(0, q);
+        }
+        String last = uri.substring(uri.lastIndexOf('/') + 1);
+        if (last.length() > 0 && !last.contains(":")) {
+            return last;
+        }
+        return "vscode-download-" + System.currentTimeMillis();
     }
 
     @Override
