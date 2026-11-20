@@ -63,7 +63,7 @@
 | 集成终端 | ✅ | rootfs 内 `/bin/bash`，可运行 Linux 命令 |
 | 源代码管理（Git） | ✅ | 1.0.22-l 起 rootfs 内预装 git 2.34.1 与完整依赖闭包（含 perl），用 guest 自己的 glibc 实跑过 `init/add/commit/log`；凭据仍需你自己配 |
 | 扩展市场 | ✅ | 联网时从 Marketplace / Open VSX 安装 |
-| 调试（Node/Python 等） | ✅ | 依赖对应 debug adapter，由扩展提供 |
+| 调试（Node/Python 等） | ✅ | 依赖对应 debug adapter，由扩展提供；1.0.23-l 起 rootfs 预装 python3 3.10.12，Python 解释器可被直接发现 |
 | 任务 / 输出 / 问题面板 | ✅ | — |
 | 命令面板、快捷键 | ✅ | 软键盘 + 外接键盘均可用 |
 | 多文件夹工作区 | ✅ | URL 参数 `?folder=` |
@@ -87,7 +87,7 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 | 文件 | 大小 | 内容 |
 |---|---|---|
-| `rootfs.tar.gz` | 44,258,777 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh、**git 2.34.1 与 19 个依赖含 perl**） |
+| `rootfs.tar.gz` | 58,484,628 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh、**git 2.34.1 与 19 个依赖含 perl**、**python3 3.10.12 与 26 个依赖含 pip/venv**） |
 | `vscode.tar.gz` | 88,452,362 B | 裁剪后的 serve-web 树（node、node_modules、94 个内置扩展、out） |
 | `usr.tar.gz` | 136,008 B | PRoot 备用副本（实际运行走 nativeLibraryDir） |
 | `omni.ja` | 15,141,515 B | GeckoView 资源包 |

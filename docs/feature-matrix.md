@@ -49,7 +49,8 @@
 | 集成终端（bash） | 可用 | 运行在 PRoot 的 Ubuntu 用户态里 |
 | 多终端标签、拆分终端 | 可用 | |
 | 终端内运行 git | 可用 | 1.0.22-l 起随 rootfs 预装（2.34.1 + 依赖闭包），无需联网安装 |
-| 终端内运行 node / python3 / gcc | 部分可用 | node 随 vscode 树提供；python3 与 gcc 需 `bootstrap.sh` 按需 apt 安装（rootfs 未预装） |
+| 终端内运行 node / python3 | 可用 | node 随 vscode 树提供；python3 3.10.12 自 1.0.23-l 起随 rootfs 预装（含 ssl/sqlite3/ctypes/pip） |
+| 终端内运行 gcc 等编译器 | 需联网安装 | rootfs 未预装，需 `bootstrap.sh` 按需 apt 安装 |
 | 任务（tasks.json）与问题匹配器 | 可用 | |
 | 调试控制台 | 可用 | 调试适配器需按语言自行安装 |
 | 端口转发 | 受限 | 仅回环，服务端已监听 `127.0.0.1` |

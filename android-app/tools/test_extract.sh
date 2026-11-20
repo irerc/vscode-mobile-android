@@ -89,7 +89,7 @@ fi
 # 3e. Pin the exact entry counts so a repack that loses files is caught rather
 #     than absorbed by the tolerance above. GNU tar reports one fewer for rootfs
 #     because it keeps the hardlink as a link, not a second file.
-if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 5074 ]; then ok "rootfs entry count is 5074"; else bad "rootfs entry count drifted"; fi
+if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 7333 ]; then ok "rootfs entry count is 7333"; else bad "rootfs entry count drifted"; fi
 if [ "$(find "$W/v" -mindepth 1 | wc -l)" -eq 4713 ]; then ok "vscode entry count is 4713"; else bad "vscode entry count drifted"; fi
 
 # 3f. The integrated terminal is not simulated: it asks node-pty, a native module,
@@ -123,6 +123,26 @@ if [ -x "$W/h/usr/bin/git" ]; then
   esac
 else
   bad "usr/bin/git missing from the rootfs payload"
+fi
+
+# 3h. python3 ships in the payload too, because the Python extension is useless
+#     without an interpreter and a clean device must not need apt first. Import
+#     the modules a real interpreter discovery touches (ssl and sqlite3 are the
+#     ones that used to be dropped from the payload, see known-issues row 34),
+#     and check pip is importable so virtualenvs can be built offline.
+if [ -x "$W/h/usr/bin/python3" ]; then
+  pv="$(cd "$W/h" && timeout 180 ./lib/ld-linux-aarch64.so.1 --library-path ./usr/lib/aarch64-linux-gnu:./lib/aarch64-linux-gnu ./usr/bin/python3 -c 'import sys,sqlite3,ssl,ctypes; print(sys.version.split()[0])' 2>&1 | tail -1)"
+  case "$pv" in
+    3.10.*) ok "guest python3 runs from the extracted tree ($pv)" ;;
+    *) bad "guest python3 did not run ($(echo "$pv" | head -c 70))" ;;
+  esac
+  mv="$(cd "$W/h" && timeout 180 ./lib/ld-linux-aarch64.so.1 --library-path ./usr/lib/aarch64-linux-gnu:./lib/aarch64-linux-gnu ./usr/bin/python3 -m pip --version 2>&1 | tail -1)"
+  case "$mv" in
+    pip*) ok "guest pip is importable" ;;
+    *) bad "guest pip is not importable ($(echo "$mv" | head -c 70))" ;;
+  esac
+else
+  bad "usr/bin/python3 missing from the rootfs payload"
 fi
 
 # 4. the exact entry that used to abort must be a working absolute symlink.
