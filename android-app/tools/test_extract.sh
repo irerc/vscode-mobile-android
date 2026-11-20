@@ -57,6 +57,41 @@ for t in rootfs vscode; do
   if [ "$delta" -le 5 ]; then ok "$t: entry count within tolerance ($delta)"; else bad "$t: entry count differs by $delta"; fi
 done
 
+# 3b. The hardlink fix: rootfs has exactly one hardlink (usr/bin/gunzip ->
+#     usr/bin/gzip). A hardlink cannot be created through the framework, so TarGz
+#     materialises it as a copy and must carry the execute bit over explicitly.
+#     Without that it landed as 0644 and every gzip/gunzip call in the guest died
+#     with Permission denied - invisible to the count and symlink checks above.
+rm -rf "$W/h"; mkdir -p "$W/h"
+run "$RT/rootfs.tar.gz" "$W/h" >/dev/null 2>&1
+for f in usr/bin/gunzip usr/bin/gzip; do
+  if [ -x "$W/h/$f" ]; then ok "$f is executable"; else bad "$f is not executable"; fi
+done
+
+# 3c. The VS Code tree ships its own node and the code-server wrapper; both must
+#     come out executable or the first launch cannot start the server at all.
+rm -rf "$W/v"; mkdir -p "$W/v"
+run "$RT/vscode.tar.gz" "$W/v" >/dev/null 2>&1
+for f in vscode/node vscode/bin/code-server; do
+  if [ -x "$W/v/$f" ]; then ok "$f is executable"; else bad "$f is not executable"; fi
+done
+
+# 3d. The Android font fallback lives in the shipped workbench.css. A repack that
+#     drops or overwrites that file silently brings the CJK boxes back.
+css="$W/v/vscode/out/vs/code/browser/workbench/workbench.css"
+if [ -f "$css" ]; then
+  hits="$(grep -c 'sans-serif!important' "$css" || true)"
+  if [ "$hits" -ge 3 ]; then ok "workbench.css carries the font patch ($hits hits)"; else bad "workbench.css patch missing ($hits hits)"; fi
+else
+  bad "workbench.css missing from the tree"
+fi
+
+# 3e. Pin the exact entry counts so a repack that loses files is caught rather
+#     than absorbed by the tolerance above. GNU tar reports one fewer for rootfs
+#     because it keeps the hardlink as a link, not a second file.
+if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 1290 ]; then ok "rootfs entry count is 1290"; else bad "rootfs entry count drifted"; fi
+if [ "$(find "$W/v" -mindepth 1 | wc -l)" -eq 4713 ]; then ok "vscode entry count is 4713"; else bad "vscode entry count drifted"; fi
+
 # 4. the exact entry that used to abort must be a working absolute symlink.
 #    Its own extraction dir is needed: $W/a holds the last tarball of the loop.
 rm -rf "$W/c"; mkdir -p "$W/c"

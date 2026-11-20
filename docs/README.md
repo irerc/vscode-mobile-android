@@ -106,11 +106,23 @@ bash android-app/tools/verify_apk.sh dist/vscode-mobile-L.apk
 bash android-app/tools/test_extract.sh android-app
 ```
 
-它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
+它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。另有三类在这份测试里补上的断言，都是纯粹靠条目数/软链数看不出来的回归：**可执行位**（rootfs 里唯一的硬链 `usr/bin/gunzip` 被物化成副本后必须带 x 位、`vscode/node` 与 `vscode/bin/code-server` 必须可执行）、**补丁在场**（`workbench.css` 的 `sans-serif!important` 至少 3 处）、**精确条目数**（rootfs 1290、vscode 4713，防止重打包悄悄丢文件）。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
 
 脚本本身也踩过两个坑并已固化：JDK 17 在 `LANG` 未设时 `LoggerFinderLoader` 抛 `ExceptionInInitializerError`，以及含空格+中文的工程路径直接传给 `java` 会参数乱码——所以脚本 `export LANG=C.UTF-8` 且先 `cp` 到 ASCII 临时路径。
 
 ## 六、验证记录（历史）
+
+**v1.0.18-l（versionCode 32）的离线端到端验证**
+
+从**发布产物本身**出发走完整条链，而不是从源码树出发：`unzip` 出 APK 内的 `assets/runtime/*.tar.gz`，用 APK 里那份 `TarGz.java`（打桩 `android.system.Os.symlink` 后在桌面 JVM 上编译）解到临时目录，再用解出来的树起 serve-web，最后用无头 Chromium 加载它。
+
+- 解包：rootfs `EXTRACTED=1290`、vscode `EXTRACTED=4713`，与包内条目数逐一相符；软链 246 个；`usr/bin/awk` 顺着 `etc/alternatives` 链解析到 `usr/bin/mawk`；`usr/bin/gunzip` 为 `-rwx--x--x`（硬链接修复生效）、`node` 与 `bin/code-server` 均可执行。
+- 服务：`node out/server-main.js --host 127.0.0.1 --port 8830 --without-connection-token --server-data-dir …` 输出 `Web UI available`。
+- 页面：无头 Chromium 加载该地址后标题为 `Welcome - Visual Studio Code`，工作台文本含 `Start New File…` / `Open a Folder` / `Walkthroughs` / `Recent`，`--monaco-monospace-font` 与 `.monaco-editor .view-lines` 的 computed font 均以 `sans-serif` 收尾（即中文字体兜底确实随包生效，且不需要任何运行时注入）。
+- 扩展市场：同一页面里点开扩展视图能看到真实数据（`Popular` 下的 Python 带 246.1M 安装量），关键词搜索 `prettier` 出一屏结果；CDP 抓到市场请求由**浏览器**发起（`marketplace.visualstudio.com/_apis/public/gallery/extensionquery` 与各 `gallerycdn.vsassets.io` 的 VSIX 地址）。
+- 扩展安装（不经过 PRoot，因此签名校验进程能正常跑）：用解出来的树执行自检探针那条命令 `./bin/code-server --install-extension ms-python.python --extensions-dir <临时目录>`，四个包全部成功落盘（`ms-python.python` 2026.10.0、`vscode-pylance` 2026.4.1、`debugpy` 2026.6.0、`vscode-python-envs` 1.44.0），`--version` 输出 `1.144.0` / `2c33b50b`。这条说明「搜不到 / 装不上」在载荷与市场可达性层面均已排除，剩下的差异只在 PRoot（签名校验被 137 打死，由预置 `extensions.verifySignature: false` 绕开）与设备网络。
+
+这一条链能替代的：解包器、载荷完整性、服务端可启动、工作台可渲染、字体兜底生效。替代不了的：PRoot 本身、GeckoView 渲染、Android 权限与通知、以及「肉眼看着顺不顺眼」——这些仍需真机。
 
 **v1.0.13-l（versionCode 27，历史产物、未发布）的静态 + 真机验证**
 
