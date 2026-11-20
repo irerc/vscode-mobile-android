@@ -45,6 +45,7 @@
 7. **Microsoft 账号 / Settings Sync / Live Share 不在支持范围。** 这些依赖微软云服务与内嵌浏览器登录流程，Web 版工作台本身也受限。
 8. **Copilot 内置扩展未打包。** 原树 `extensions/copilot` 156MB、`node_modules/@github` 157MB、`mermaid-markdown-features` 47MB 被裁掉以控制 APK 体积（199MB）。需要时可在工作台内从市场安装，或后续追加打进 assets。
 
+| 25 | 「干净设备即装即用」从未被单独验证过：一直只在已经跑过一次的设备上试装 | **服务端那半边已离线验证**（2026-11-20）：把 `assets/runtime/vscode.tar.gz` 解到空目录，用包里自带的 `vscode/node` v24.22.1 跑**与 Java 里逐字相同**的命令 `out/server-main.js --host 127.0.0.1 --port 8800 --without-connection-token --accept-server-license-terms --disable-telemetry --server-data-dir …`，2 秒内起来，日志给出 `Web UI available at http://localhost:8800`、`Extension host agent started`、默认配置文件扩展目录初始化完成；`/` 返回 200（6017 B，引用 workbench.js），随后 workbench.js 21,490,997 B、workbench.css 1,811,449 B、nls.messages.js 1,321,164 B、图标 11,479 B 全部 200。**仍缺**：Android 侧首启解包 + GeckoView 渲染 + 真机安装，这三步需要无障碍才能做 |
 ## 三、开发环境限制
 
 | 项 | 说明 |
