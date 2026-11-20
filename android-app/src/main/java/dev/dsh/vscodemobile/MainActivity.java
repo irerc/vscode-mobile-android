@@ -382,6 +382,17 @@ public class MainActivity extends Activity {
         applyImmersive();
     }
 
+    // IMMERSIVE_STICKY normally re-hides the bars by itself, but a focus round trip
+    // (soft keyboard closing, a system dialog, returning from Settings) is the case
+    // where it reliably does not. Re-assert on every focus gain; it is idempotent.
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            applyImmersive();
+        }
+    }
+
     private void openSettings() {
         try {
             startActivity(new android.content.Intent(this, SettingsActivity.class));
