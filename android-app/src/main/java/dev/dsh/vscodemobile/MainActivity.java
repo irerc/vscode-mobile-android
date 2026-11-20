@@ -546,7 +546,8 @@ public class MainActivity extends Activity {
     //    that check is exactly the kernel check the guest would hit anyway.
     private List<String> storageBinds(File rootfs) {
         List<String> out = new ArrayList<String>();
-        try {
+        int level = bindLevel();
+        if (level >= 1) try {
             File ext = getExternalFilesDir(null);
             if (ext != null && ext.isDirectory()) {
                 new File(rootfs, "root/shared").mkdirs();
@@ -556,7 +557,7 @@ public class MainActivity extends Activity {
         } catch (Throwable t) {
             Log.w(TAG, "storageBinds: app external dir", t);
         }
-        try {
+        if (level >= 2) try {
             File phone = new File("/storage/emulated/0");
             if (phone.isDirectory() && phone.canRead() && phone.list() != null) {
                 new File(rootfs, "root/phone").mkdirs();
@@ -570,6 +571,32 @@ public class MainActivity extends Activity {
         }
         return out;
     }
+
+    // Mounting is a convenience that must never cost the server. If PRoot here
+    // turned out not to accept the host:guest form, the process would exit at once
+    // and the app would look broken on a device that had been fine before - a
+    // regression far worse than an invisible phone folder. So the mounts are
+    // graded: 2 = app dir + phone, 1 = app dir only, 0 = none. A startup that dies
+    // early drops one level, retries, and remembers the level that worked.
+    private static final String PREF_BIND_LEVEL = "bindLevel";
+
+    private int bindLevel() {
+        if (bindLevelCache < 0) {
+            bindLevelCache = prefs().getInt(PREF_BIND_LEVEL, 2);
+        }
+        return bindLevelCache;
+    }
+
+    private void degradeBindLevel() {
+        int next = bindLevel() - 1;
+        if (next < 0) {
+            next = 0;
+        }
+        bindLevelCache = next;
+        prefs().edit().putInt(PREF_BIND_LEVEL, next).apply();
+    }
+
+    private volatile int bindLevelCache = -1;
 
     // PRoot wants its -b options before the guest program path, so splice them in
     // ahead of -w rather than rebuilding each argv literal.
@@ -726,7 +753,8 @@ public class MainActivity extends Activity {
                             .append(" patchHits=").append(countIn(css, "sans-serif!important")).append('\n');
                     sb.append("[http] ").append(describeGet(baseUrl)).append('\n');
                     sb.append("[install] ").append(installOneExtension(rootfs)).append('\n');
-                    sb.append("[phone] ").append(probePhone(rootfs)).append('\n');
+                    sb.append("[phone] bindLevel=").append(bindLevel()).append(' ')
+                            .append(probePhone(rootfs)).append('\n');
                 } catch (Throwable tr) {
                     sb.append("[selftest error] ").append(tr).append('\n');
                 }
@@ -954,7 +982,18 @@ public class MainActivity extends Activity {
                     return;
                 }
                 if (!sServer.isAlive()) {
-                    uiError("\u670D\u52A1\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF08exit=" + sServer.exitValue() + "\uFF09");
+                    final int exit = sServer.exitValue();
+                    if (bindLevel() > 0) {
+                        degradeBindLevel();
+                        Log.w(TAG, "server exited (exit=" + exit + ") with storage mounts, retrying at bindLevel=" + bindLevel());
+                        sServer = startServer();
+                        if (sServer == null) {
+                            uiError("\u65E0\u6CD5\u542F\u52A8 proot \u8FDB\u7A0B\u3002");
+                            return;
+                        }
+                        continue;
+                    }
+                    uiError("\u670D\u52A1\u8FDB\u7A0B\u5DF2\u9000\u51FA\uFF08exit=" + exit + "\uFF09");
                     return;
                 }
                 Thread.sleep(2000);
