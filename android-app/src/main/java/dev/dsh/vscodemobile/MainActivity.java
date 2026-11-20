@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ensureStoragePermission();
         super.onCreate(savedInstanceState);
         // A first launch unpacks ~1.6 GB; letting the display sleep throttles that
         // badly (and is what users read as "stuck").
@@ -532,6 +534,173 @@ public class MainActivity extends Activity {
     // seeded settings file, the workbench HTTP response, and a real
     // `code-server --install-extension` run inside PRoot (the check that used to
     // die on vsce-sign). Every step is best-effort; the file always gets written.
+    // A ported desktop editor that cannot open the files the user already has on
+    // their phone is not ported far enough, and until now nothing mounted any of
+    // them: the guest only ever saw its own rootfs. Two mounts, in order of
+    // reliability:
+    //  * the app's own external files dir needs no permission on any Android
+    //    version, so /root/shared is always present and always writable;
+    //  * /storage/emulated/0 (DCIM, Download, Documents, ...) only becomes visible
+    //    once the storage permissions are granted, so it is bound as /root/phone
+    //    only when this process can list it - the guest runs as the same uid, so
+    //    that check is exactly the kernel check the guest would hit anyway.
+    private List<String> storageBinds(File rootfs) {
+        List<String> out = new ArrayList<String>();
+        try {
+            File ext = getExternalFilesDir(null);
+            if (ext != null && ext.isDirectory()) {
+                new File(rootfs, "root/shared").mkdirs();
+                out.add("-b");
+                out.add(ext.getAbsolutePath() + ":/root/shared");
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "storageBinds: app external dir", t);
+        }
+        try {
+            File phone = new File("/storage/emulated/0");
+            if (phone.isDirectory() && phone.canRead() && phone.list() != null) {
+                new File(rootfs, "root/phone").mkdirs();
+                out.add("-b");
+                out.add("/storage/emulated/0:/root/phone");
+            } else {
+                Log.w(TAG, "storageBinds: /storage/emulated/0 not readable yet");
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "storageBinds: /storage/emulated/0", t);
+        }
+        return out;
+    }
+
+    // PRoot wants its -b options before the guest program path, so splice them in
+    // ahead of -w rather than rebuilding each argv literal.
+    private String[] withStorageBinds(String[] cmd, File rootfs) {
+        List<String> binds = storageBinds(rootfs);
+        if (binds.isEmpty()) {
+            return cmd;
+        }
+        int at = cmd.length;
+        for (int i = 0; i < cmd.length; i++) {
+            if ("-w".equals(cmd[i])) {
+                at = i;
+                break;
+            }
+        }
+        List<String> out = new ArrayList<String>(cmd.length + binds.size());
+        for (int i = 0; i < at; i++) {
+            out.add(cmd[i]);
+        }
+        out.addAll(binds);
+        for (int i = at; i < cmd.length; i++) {
+            out.add(cmd[i]);
+        }
+        return out.toArray(new String[0]);
+    }
+
+    // targetSdk 28 keeps the legacy storage model, so these two permissions still
+    // cover the whole of /storage/emulated/0. Asked once per install; a refusal is
+    // not fatal, /root/shared keeps working.
+    private void ensureStoragePermission() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT < 23) {
+                return;
+            }
+            if (checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+            if (prefs().getBoolean("askedStorage", false)) {
+                return;
+            }
+            prefs().edit().putBoolean("askedStorage", true).apply();
+            requestPermissions(new String[]{
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            }, 7);
+        } catch (Throwable t) {
+            Log.w(TAG, "ensureStoragePermission", t);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] granted) {
+        super.onRequestPermissionsResult(req, perms, granted);
+        if (req != 7) {
+            return;
+        }
+        boolean ok = granted != null && granted.length > 0
+                && granted[0] == PackageManager.PERMISSION_GRANTED;
+        Log.i(TAG, "storage permission granted=" + ok);
+        // The mount list is computed when the server starts, so a late grant only
+        // shows up after a restart. Do it quietly, and only if a server is up.
+        if (ok && sServer != null && sServer.isAlive()) {
+            restartServer();
+        }
+    }
+
+    // The mounts are only worth anything if the guest can actually see them, and
+    // the guest runs as the same uid under PRoot, so ask it directly instead of
+    // inferring from what this process can read.
+    private String probePhone(File rootfs) {
+        File files = getFilesDir();
+        String nativeDir = getApplicationInfo().nativeLibraryDir;
+        String[] cmd = new String[]{
+                nativeDir + "/libproot.so",
+                "--kill-on-exit",
+                "-r", files + "/rootfs",
+                "-0",
+                "-b", "/dev",
+                "-b", "/proc",
+                "-b", "/sys",
+                "-b", "/system",
+                "-b", "/apex",
+                "-b", "/vendor",
+                "-w", "/root",
+                "/bin/sh", "-c",
+                "for d in /root/phone /root/shared; do"
+                        + " if [ -d \"$d\" ]; then"
+                        + " n=$(ls -A \"$d\" 2>/dev/null | wc -l);"
+                        + " t=$(touch \"$d/.dsh-probe\" 2>&1 && rm -f \"$d/.dsh-probe\" && echo writable || echo readonly);"
+                        + " echo \"$d entries=$n $t\";"
+                        + " else echo \"$d missing\"; fi; done;"
+                        + " ls -A /root/phone 2>/dev/null | head -3 | tr '\\n' ' '",
+        };
+        cmd = withStorageBinds(cmd, rootfs);
+        Process p = null;
+        try {
+            p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            final Process proc = p;
+            ui.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        proc.destroy();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }, 60000);
+            BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) {
+                sb.append(line).append(" | ");
+                if (sb.length() > 700) {
+                    break;
+                }
+            }
+            int rc = p.waitFor();
+            return "exit=" + rc + " " + sb.toString().trim();
+        } catch (Throwable t) {
+            return "error=" + t;
+        } finally {
+            if (p != null) {
+                try {
+                    p.destroy();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private void maybeRunSelfTest(final String baseUrl) {
         final File done = new File(getFilesDir(), ".selftest-" + versionStamp());
         if (done.isFile()) {
@@ -557,6 +726,7 @@ public class MainActivity extends Activity {
                             .append(" patchHits=").append(countIn(css, "sans-serif!important")).append('\n');
                     sb.append("[http] ").append(describeGet(baseUrl)).append('\n');
                     sb.append("[install] ").append(installOneExtension(rootfs)).append('\n');
+                    sb.append("[phone] ").append(probePhone(rootfs)).append('\n');
                 } catch (Throwable tr) {
                     sb.append("[selftest error] ").append(tr).append('\n');
                 }
@@ -715,6 +885,7 @@ public class MainActivity extends Activity {
                 // watching its own extensions folder, and this probe must not race it.
                 "--extensions-dir", "/root/.selftest-ext",
         };
+        cmd = withStorageBinds(cmd, rootfs);
         Process p = null;
         try {
             p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
@@ -1083,6 +1254,7 @@ public class MainActivity extends Activity {
                     // 跳过 Welcome 页，而用户要的正是「像正常全新安装那样」。
 
             };
+            cmd = withStorageBinds(cmd, new File(files, "rootfs"));
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
             pb.directory(getFilesDir());
