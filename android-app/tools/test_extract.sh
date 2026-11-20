@@ -145,6 +145,28 @@ else
   bad "usr/bin/python3 missing from the rootfs payload"
 fi
 
+# 3i. Resolve every DT_NEEDED of every shipped ELF strictly inside the payload.
+#     This is the assertion that would have caught the 1.0.22-l defect: the
+#     runtime checks above run guest binaries through the guest loader while the
+#     process still sees the host filesystem, so a missing /lib/*.so is silently
+#     satisfied by the host. Here nothing outside the payload counts.
+if python3 "$APP/tools/check_elf_deps.py" "$W/h" "$W/v" >/tmp/elfdeps.$$ 2>&1; then
+  ok "elf deps: $(sed -n '1p' /tmp/elfdeps.$$), closure complete"
+else
+  bad "elf deps: $(sed -n '1,4p' /tmp/elfdeps.$$ | tr '\n' ' ')"
+fi
+rm -f /tmp/elfdeps.$$
+
+# 3j. git's perl helpers (git add -p, git send-email, the contrib scripts) need
+#     Error.pm from liberror-perl plus core modules like lib.pm. They cannot be
+#     *run* here: this container has no ptrace and no user namespaces, so proot
+#     and chroot both refuse, and the guest loader trick makes perl read the
+#     host's /usr/lib (which carries a different perl version). Assert presence
+#     against the module paths baked into the payload's perl instead.
+for m in usr/share/perl5/Error.pm usr/lib/aarch64-linux-gnu/perl-base/lib.pm usr/share/perl5/Git.pm; do
+  if [ -f "$W/h/$m" ]; then ok "perl module present: $m"; else bad "perl module missing: $m"; fi
+done
+
 # 4. the exact entry that used to abort must be a working absolute symlink.
 #    Its own extraction dir is needed: $W/a holds the last tarball of the loop.
 rm -rf "$W/c"; mkdir -p "$W/c"

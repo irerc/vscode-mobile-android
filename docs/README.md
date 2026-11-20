@@ -90,6 +90,8 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 | `rootfs.tar.gz` | 58,484,628 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh、**git 2.34.1 与 19 个依赖含 perl**、**python3 3.10.12 与 26 个依赖含 pip/venv**） |
 | `vscode.tar.gz` | 88,452,362 B | 裁剪后的 serve-web 树（node、node_modules、94 个内置扩展、out） |
 | `usr.tar.gz` | 136,008 B | PRoot 备用副本（实际运行走 nativeLibraryDir） |
+
+载荷的依赖闭合是**静态断言**过的，不是运行时验过的：`tools/check_elf_deps.py` 解析载荷内每个 ELF 的 `DT_NEEDED` 与解释器，只认载荷内部的库，任何落到宿主的都不算数（本容器 `CapEff=0` 且无 user namespace，proot/chroot 都不可用，详见 known-issues 第 35 条）。
 | `omni.ja` | 15,141,515 B | GeckoView 资源包 |
 
 ## 六、复核产物（任何人都能跑）
