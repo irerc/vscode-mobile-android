@@ -979,6 +979,96 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * Run one command inside the guest with the same proot assembly the server
+     * uses. This is how the self-test reports facts that cannot be established
+     * offline: whether git, python3 and pip really execute on the device, and
+     * whether a PTY can be allocated there. Offline checks run guest binaries
+     * through the guest loader against host libraries, so they can be satisfied
+     * by the host and never prove the payload is self-sufficient (known-issues 35).
+     */
+    private String guestProbe(String shellCommand) {
+        Process p = null;
+        try {
+            String files = getFilesDir().getAbsolutePath();
+            String nativeDir = getApplicationInfo().nativeLibraryDir;
+            File tmp = new File(files, "tmp");
+            tmp.mkdirs();
+            String[] cmd = new String[]{
+                    nativeDir + "/libproot.so",
+                    "--kill-on-exit",
+                    "-r", files + "/rootfs",
+                    "-0",
+                    "-b", "/dev",
+                    "-b", "/proc",
+                    "-b", "/sys",
+                    "-w", "/root",
+                    "/usr/bin/bash",
+                    "-c", shellCommand,
+            };
+            cmd = withStorageBinds(cmd, new File(files, "rootfs"));
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.redirectErrorStream(true);
+            pb.directory(getFilesDir());
+            pb.environment().put("PROOT_TMP_DIR", tmp.getAbsolutePath());
+            pb.environment().put("PROOT_LOADER", nativeDir + "/libprootloader.so");
+            pb.environment().put("LD_LIBRARY_PATH", nativeDir);
+            pb.environment().put("PROOT_NO_SECCOMP", "1");
+            pb.environment().put("HOME", "/root");
+            pb.environment().put("TMPDIR", "/tmp");
+            pb.environment().put("LANG", "C.UTF-8");
+            p = pb.start();
+            final Process proc = p;
+            final StringBuilder out = new StringBuilder();
+            Thread drain = new Thread(new Runnable() {
+                public void run() {
+                    BufferedReader r = null;
+                    try {
+                        r = new BufferedReader(new InputStreamReader(proc.getInputStream(), "UTF-8"));
+                        String line;
+                        while ((line = r.readLine()) != null) {
+                            synchronized (out) {
+                                if (out.length() < 4000) {
+                                    out.append(line).append(' ');
+                                }
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    } finally {
+                        if (r != null) {
+                            try {
+                                r.close();
+                            } catch (IOException ignored) {
+                            }
+                        }
+                    }
+                }
+            }, "guestprobe");
+            drain.setDaemon(true);
+            drain.start();
+            boolean finished = p.waitFor(90, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroy();
+                return "(timeout)";
+            }
+            drain.join(3000);
+            synchronized (out) {
+                String text = out.toString().trim();
+                return text.length() == 0 ? "(no output, exit=" + p.exitValue() + ")" : text;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "guestProbe", t);
+            return "(failed: " + t + ")";
+        } finally {
+            if (p != null) {
+                try {
+                    p.destroy();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private void maybeRunSelfTest(final String baseUrl) {
         final File done = new File(getFilesDir(), ".selftest-" + versionStamp());
         if (done.isFile()) {
@@ -1006,6 +1096,22 @@ public class MainActivity extends Activity {
                     sb.append("[install] ").append(installOneExtension(rootfs)).append('\n');
                     sb.append("[phone] bindLevel=").append(bindLevel()).append(' ')
                             .append(probePhone(rootfs)).append('\n');
+                    // Payload facts a device alone can answer (known-issues 35).
+                    // If proot itself cannot run here, the rest would only burn
+                    // four 90 s timeouts in the background, so stop after the first
+                    // failure and say so once.
+                    String gitProbe = guestProbe("git --version 2>&1 | head -1");
+                    sb.append("[guest] git=").append(gitProbe).append('\n');
+                    if (gitProbe.startsWith("(failed") || gitProbe.startsWith("(timeout")) {
+                        sb.append("[guest] python/pip/pty skipped: proot unavailable\n");
+                    } else {
+                        sb.append("[guest] python=").append(guestProbe(
+                                "python3 -c 'import sys,sqlite3,ssl,ctypes;print(\"py\",sys.version.split()[0],\"sqlite+ssl+ctypes ok\")' 2>&1 | tail -1")).append('\n');
+                        sb.append("[guest] pip=").append(guestProbe(
+                                "python3 -m pip --version 2>&1 | head -1")).append('\n');
+                        sb.append("[guest] pty=").append(guestProbe(
+                                "python3 -c 'import pty;pty.spawn([\"/bin/echo\",\"PTY_OK\"])' 2>&1 | head -1")).append('\n');
+                    }
                 } catch (Throwable tr) {
                     sb.append("[selftest error] ").append(tr).append('\n');
                 }

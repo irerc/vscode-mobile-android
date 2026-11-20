@@ -204,7 +204,7 @@ for pair in "${LIBAARS[@]}"; do
 done
 echo "library packages: ${#EXTRAPKGS[@]}"
 
-echo "== 2/6 aapt2 link (L, vc 38, 1.0.24-l) =="
+echo "== 2/6 aapt2 link (L, vc 39, 1.0.25-l) =="
 LINK_INPUTS=("$B/flat.zip")
 for z in "$B/flatlib"/*.zip; do [ -s "$z" ] && LINK_INPUTS+=("$z"); done
 echo "  link inputs: ${#LINK_INPUTS[@]} zip containers"
@@ -222,7 +222,7 @@ set +e
   --manifest "$APP_DIR/src/main/AndroidManifest.xml" \
   --java "$B/gen" \
   --min-sdk-version 26 --target-sdk-version 28 \
-  --version-code 38 --version-name "1.0.24-l" \
+  --version-code 39 --version-name "1.0.25-l" \
   --auto-add-overlay \
   "${LINK_INPUTS[@]}"
 LINK_RC=$?
