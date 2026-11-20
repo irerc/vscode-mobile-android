@@ -774,11 +774,11 @@ public class MainActivity extends Activity {
         if (response == null || response.body == null) {
             return;
         }
-        final String name = downloadName(response);
+        final String name = Downloads.nameFromHeaders(response.headers, response.uri);
         new Thread(new Runnable() {
             public void run() {
                 File dir = downloadDir();
-                File out = uniqueFile(dir, name);
+                File out = Downloads.unique(dir, name);
                 InputStream in = response.body;
                 FileOutputStream fos = null;
                 long total = 0;
@@ -839,64 +839,6 @@ public class MainActivity extends Activity {
         File inner = new File(getFilesDir(), "downloads");
         inner.mkdirs();
         return inner;
-    }
-
-    private static File uniqueFile(File dir, String name) {
-        File f = new File(dir, name);
-        if (!f.exists()) {
-            return f;
-        }
-        int dot = name.lastIndexOf('.');
-        String stem = dot > 0 ? name.substring(0, dot) : name;
-        String ext = dot > 0 ? name.substring(dot) : "";
-        for (int i = 2; i < 1000; i++) {
-            f = new File(dir, stem + "-" + i + ext);
-            if (!f.exists()) {
-                return f;
-            }
-        }
-        return f;
-    }
-
-    /** Prefer Content-Disposition, then the last path segment, then a timestamp. */
-    private static String downloadName(WebResponse response) {
-        String cd = null;
-        if (response.headers != null) {
-            for (java.util.Map.Entry<String, String> e : response.headers.entrySet()) {
-                if ("content-disposition".equalsIgnoreCase(e.getKey())) {
-                    cd = e.getValue();
-                    break;
-                }
-            }
-        }
-        if (cd != null) {
-            int i = cd.toLowerCase(java.util.Locale.ROOT).indexOf("filename=");
-            if (i >= 0) {
-                String v = cd.substring(i + 9).trim();
-                if (v.startsWith("\"")) {
-                    int end = v.indexOf('"', 1);
-                    v = end > 0 ? v.substring(1, end) : v.substring(1);
-                }
-                v = v.replace('\\', '/');
-                int slash = v.lastIndexOf('/');
-                if (slash >= 0) {
-                    v = v.substring(slash + 1);
-                }
-                if (v.length() > 0 && !v.contains("/")) {
-                    return v;
-                }
-            }
-        }
-        String uri = response.uri == null ? "" : response.uri;
-        int q = uri.indexOf('?');
-        if (q > 0) {
-            uri = uri.substring(0, q);
-        }
-        String last = uri.substring(uri.lastIndexOf('/') + 1);
-        if (last.length() > 0 && !last.contains(":")) {
-            return last;
-        }
-        return "vscode-download-" + System.currentTimeMillis();
     }
 
     @Override

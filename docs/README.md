@@ -106,6 +106,11 @@ bash android-app/tools/verify_apk.sh dist/vscode-mobile-L.apk
 
 ```bash
 bash android-app/tools/test_extract.sh android-app
+# 三套离线验证一条命令全跑（下载逻辑 / 载荷解包与 ELF 闭包 / 成品 APK），
+# 全绿时打印 ALL_TESTS_OK；1.0.26-l 起可用
+bash android-app/tools/test_all.sh dist/vscode-mobile-L.apk
+# 只跑下载命名与去重逻辑（JVM，无需设备）
+bash android-app/tools/test_downloads.sh android-app
 ```
 
 它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。另有三类在这份测试里补上的断言，都是纯粹靠条目数/软链数看不出来的回归：**可执行位**（rootfs 里唯一的硬链 `usr/bin/gunzip` 被物化成副本后必须带 x 位、`vscode/node` 与 `vscode/bin/code-server` 必须可执行）、**补丁在场**（`workbench.css` 的 `sans-serif!important` 至少 3 处）、**精确条目数**（rootfs 1290、vscode 4713，防止重打包悄悄丢文件）。此后又加了一层更接近「能不能用」的断言：**PTY 真能分配**——拿解出来的树里那份 `node` 与 `node_modules/node-pty` 真 `spawn` 一次，要求拿到 `/dev/pts/N` 与 shell 回显，因为集成终端不是用 JS 模拟的，原生模块 ABI 一歪就是「终端一开就报错」，而这类失败对条目数、软链数、可执行位全都不可见。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
