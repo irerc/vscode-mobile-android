@@ -9,15 +9,15 @@
 
 ## 直接下载
 
-**vscode-mobile-1.0.15-l.apk** · 206,490,059 字节（约 197 MB） · MD5 `7b9cfc000bb8b6ce1c5e554fff11241a` · SHA-256 `0a16c561bdadf7724b48e77dbdb6b9250e7d996b5e879785829a7c04321231ef` · versionCode 29 / `1.0.15-l`
+**vscode-mobile-1.0.16-l.apk** · 206,059,979 字节（约 197 MB） · MD5 `d03b1b631d13a9aabdd944fdb838c28e` · SHA-256 `cec6dd908fbd513f832de4e2889c13fd0ffc28399d8aa4aa145dc0b84297c452` · versionCode 30 / `1.0.16-l`
 
-发布页：<https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.15-l>（资产 id 772673462，`vscode-mobile-1.0.15-l.apk`，GitHub 侧回读的 sha256 为 `0a16c561…`，与上表一致；该版本标为 prerelease，因为最后一步「肉眼确认工作台渲染」仍待设备识屏可用时补证）。
+发布页：<https://github.com/irerc/vscode-mobile-android/releases/tag/v1.0.16-l>（资产 id 772771074，`vscode-mobile-1.0.16-l.apk`，GitHub 侧回读的 sha256 为 `cec6dd90…`，与上表一致；该版本标为 prerelease，因为最后一步「肉眼确认工作台渲染」仍待设备识屏可用时补证）。
 
 本版在上一版基础上再修两处：新增 APK 与解包器的一键复核脚本（`tools/verify_apk.sh`、`tools/test_extract.sh`），并把 `SELFTEST` 日志探针与 `FLAG_KEEP_SCREEN_ON` 打进应用。累计修掉的真机崩溃链共五处，全部有 logcat 或本地复跑证据：dex 缺 Kotlin 运行时、库 `R$*` 常量类缺失、KMP metadata 空包导致 `androidx.collection.SimpleArrayMap` 不在 dex（`GeckoAppShell.<clinit>` 崩溃）、`TarGz` 把绝对软链误判为路径逃逸导致解包中止（`IOException: escape etc/alternatives/pager`）、`vscode.tar.gz` 缺 `@vscode/deviceid` 与 `@github/copilot-sdk`。详见 `docs/known-issues.md` 第 15–21 条。
 
 > v1.0.13-l（versionCode 27）真机进度（Xiaomi / Android 17 / SDK 37）：安装成功 → 启动**不再闪退** → GeckoView 起 `sandboxed_tab` 内容进程 → 运行时解包完成 → `libproot.so`+`node` 起 `serve-web` → `127.0.0.1:8800` 处于 LISTEN 且已有 GeckoView 连接。剩余一项待肉眼确认：工作台是否完整渲染（设备识屏关闭，无法读屏自证）。验收清单见 `docs/README.md` 第七节。
 
-> **当前进度（1.0.15-l，versionCode 29）**：这一版修的是两个被真机行为逼出来的根本原因，都落在同一处——App 首启预置的 `data/User/settings.json`。其一，扩展「装不上」的元凶不是网络也不是配置：serve-web 用 16MB 的 .NET 单文件 `vsce-sign` 校验 VSIX 签名，该进程在 PRoot 下被 137 打死，日志是 `Signature verification failed with 'UnknownError'`，于是预置 `extensions.verifySignature: false`（该键是 APPLICATION 级，必须放 User）；其二，中文显示成方块是因为等宽字体栈在 Android 上整条塌成通用 `monospace`，而 Android 的 monospace 家族没有汉字、Gecko 的 CJK 兜底族名又与 AOSP 把 CJK 挂在 `sans-serif` 下的命名对不上，于是给 `editor.fontFamily` / `terminal.integrated.fontFamily` 末尾追加通用 `sans-serif`。解包器另修两处：硬链接分支补 `setExecutable`（rootfs 里唯一的硬链 `usr/bin/gunzip` 之前解出来不可执行）、软链被重复计数。`tools/verify_apk.sh` 30 项全过（`VERIFY_OK`）。**仍未真机验证**：装上并肉眼确认欢迎页、沉浸式全屏、设置页、中文与扩展安装，需要在 设置 → 设备能力授权 里重新开启无障碍（当前 `enabled_accessibility_services` 为空）。
+> **当前进度（1.0.16-l，versionCode 30）**：两个用户报的毛病各自定位到了根因，且其中一个的修法在一轮实证后被推翻重做。扩展「装不上」：serve-web 用 16MB 的 .NET 单文件 `vsce-sign` 校验 VSIX 签名，该进程在 PRoot 下被 137 打死（`Signature verification failed with 'UnknownError'`）；服务端在 `downloadExtension` 里 `getValue("extensions.verifySignature")` 后据此跳过删包分支，而它的配置服务解析到的用户设置文件正是 `<server-data-dir>/data/User/settings.json`，所以 App 首启预置该开关有效。中文方块：先按「预置 `editor.fontFamily`」修，实测无效——serve-web 的工作台跑在浏览器里，界面用户设置存浏览器侧（浏览器内有 `vscode-web-db`，预置服务端文件后活动栏位置/主题/字体变量全无变化）。改为把兜底规则直接补进随包发布的 `workbench.css` 末尾（等宽两个变量追加通用 `sans-serif`，并对 `.monaco-editor .view-lines/.margin` 与 `.xterm-rows` 用 `!important` 锁定），无头浏览器加载服务端提供的这份 CSS 后编辑器文本字体已是 `"Droid Sans Mono", monospace, sans-serif`。同一套无头浏览器验证还证实：用打进去的树起服务，工作台给出完整欢迎页（标题 `Welcome - Visual Studio Code`、标签 `Welcome`、Start/Walkthroughs/Recent 齐全），扩展宿主 socket 正常建立。解包器另修两处：硬链接分支补 `setExecutable`（rootfs 里唯一的硬链 `usr/bin/gunzip` 之前解出来不可执行）、软链被重复计数。`tools/verify_apk.sh` 30 项全过（`VERIFY_OK`）。**仍未真机验证**：装上并肉眼确认欢迎页、沉浸式全屏、设置页、中文与扩展安装，需要在 设置 → 设备能力授权 里重新开启无障碍（当前 `enabled_accessibility_services` 为空）。
 
 > 关于「直接用正常的 Linux 版 VS Code」：已在同架构同 glibc 的 Ubuntu 容器里实测**桌面版 Electron VS Code**（1.146.0 arm64 deb）——窗口能建，但 GPU 子进程 `exit_code=4`（SIGILL）两次后 Chromium 直接 `GPU process isn't usable. Goodbye`；改成 `--in-process-gpu` 则主进程自身收到 `Illegal instruction`。这是 proot 的 syscall 转发与 Chromium GPU 初始化路径不兼容，**桌面版走不通**，而 `serve-web`（纯 Node）在同环境完全正常。故本项目采用「Node 服务 + 客户端渲染」，与官方 `code-server` 同构。详见 `docs/known-issues.md` 第 22 条。
 
@@ -70,7 +70,7 @@ bash android-app/build10.sh            # 产物 dist/vscode-mobile-L.apk
 | 资源 | 大小 | 来源 |
 |---|---|---|
 | `assets/runtime/rootfs.tar.gz` | 20,955,828 B | ubuntu-base 22.04.5 arm64 精简 |
-| `assets/runtime/vscode.tar.gz` | 89,034,205 B | serve-web 1.144.0 裁剪树 |
+| `assets/runtime/vscode.tar.gz` | 88,607,778 B | serve-web 1.144.0 裁剪树（含中文字体兜底补丁）|
 | `assets/omni.ja` | 15,141,515 B | GeckoView 159 |
 | `jni/arm64-v8a/*.so` | 170 MB | GeckoView + Termux proot |
 

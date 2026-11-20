@@ -640,19 +640,20 @@ public class MainActivity extends Activity {
     // Written once, before the server starts, and never touched again: if the user
     // later edits settings.json in the app we leave their file alone.
     //
-    // Two defaults, both for problems that cannot be fixed any other way:
+    // Only one key here, and it has to be this one. serve-web shells out to
+    // vsce-sign, a 16 MB .NET single-file binary, to check a VSIX signature; under
+    // PRoot that child dies with exit 137 ("Internal Code: 137" in the server log),
+    // so every install ended in "Signature verification failed". The server reads
+    // this boolean itself (server-main.js downloadExtension: getValue of
+    // "extensions.verifySignature", then the delete-on-failure branch is skipped),
+    // and its configuration service resolves the user settings file to
+    // <server-data-dir>/data/User/settings.json - exactly this path. VSIX downloads
+    // still go over TLS to the official marketplace.
     //
-    // * extensions.verifySignature=false - serve-web shells out to vsce-sign, a
-    //   16 MB .NET single-file binary, to check a VSIX signature. Under PRoot it
-    //   dies with exit 137 ("Internal Code: 137" in the server log), so every
-    //   install ends in "Signature verification failed". VSIX downloads still go
-    //   over TLS to the official marketplace; this only skips the local check.
-    // * The font stacks end with a generic sans-serif. Android's monospace family
-    //   has no CJK glyphs, and the CJK fallback names in Gecko's greprefs
-    //   ("Noto Sans CJK SC", "MiSans", ...) do not match how AOSP hangs CJK off
-    //   sans-serif, so editor and terminal text rendered as empty boxes. Adding
-    //   the generic family lets Gecko's per-glyph fallback find the system CJK
-    //   faces.
+    // Fonts deliberately do NOT live here: the workbench renders in the browser, so
+    // editor/terminal font settings are stored browser-side and seeding this file
+    // has no effect on them. The CJK fallback is patched into the shipped
+    // workbench.css instead.
     private void seedUserSettings(File rootfs) {
         File user = new File(rootfs, "root/.vscode-server/data/User");
         File json = new File(user, "settings.json");
@@ -664,9 +665,7 @@ public class MainActivity extends Activity {
             return;
         }
         String body = "{\n"
-                + "    \"extensions.verifySignature\": false,\n"
-                + "    \"editor.fontFamily\": \"'Droid Sans Mono', monospace, sans-serif\",\n"
-                + "    \"terminal.integrated.fontFamily\": \"monospace, sans-serif\"\n"
+                + "    \"extensions.verifySignature\": false\n"
                 + "}\n";
         OutputStream os = null;
         try {
