@@ -106,11 +106,22 @@ bash android-app/tools/verify_apk.sh dist/vscode-mobile-L.apk
 bash android-app/tools/test_extract.sh android-app
 ```
 
-它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。另有三类在这份测试里补上的断言，都是纯粹靠条目数/软链数看不出来的回归：**可执行位**（rootfs 里唯一的硬链 `usr/bin/gunzip` 被物化成副本后必须带 x 位、`vscode/node` 与 `vscode/bin/code-server` 必须可执行）、**补丁在场**（`workbench.css` 的 `sans-serif!important` 至少 3 处）、**精确条目数**（rootfs 1290、vscode 4713，防止重打包悄悄丢文件）。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
+它在 JVM 上直接跑真实的 `TarGz`，对 `rootfs.tar.gz` 与 `vscode.tar.gz` 各做「全新解包 + 覆盖已存在树再解一遍」，并与 GNU `tar` 比对条目数与软链数；最后还验证 `TarGz.wipe()` 对「软链指到 `/etc`」和「软链成环」的树只删自己、不跟随。另有三类在这份测试里补上的断言，都是纯粹靠条目数/软链数看不出来的回归：**可执行位**（rootfs 里唯一的硬链 `usr/bin/gunzip` 被物化成副本后必须带 x 位、`vscode/node` 与 `vscode/bin/code-server` 必须可执行）、**补丁在场**（`workbench.css` 的 `sans-serif!important` 至少 3 处）、**精确条目数**（rootfs 1290、vscode 4713，防止重打包悄悄丢文件）。此后又加了一层更接近「能不能用」的断言：**PTY 真能分配**——拿解出来的树里那份 `node` 与 `node_modules/node-pty` 真 `spawn` 一次，要求拿到 `/dev/pts/N` 与 shell 回显，因为集成终端不是用 JS 模拟的，原生模块 ABI 一歪就是「终端一开就报错」，而这类失败对条目数、软链数、可执行位全都不可见。全过输出 `EXTRACT_OK`。实测结果：rootfs 1290 项 / 软链 246 个（与 tar 一致，唯一差异是 1 个硬链按内容复制），vscode 4713 项 / 0 软链。
 
 脚本本身也踩过两个坑并已固化：JDK 17 在 `LANG` 未设时 `LoggerFinderLoader` 抛 `ExceptionInInitializerError`，以及含空格+中文的工程路径直接传给 `java` 会参数乱码——所以脚本 `export LANG=C.UTF-8` 且先 `cp` 到 ASCII 临时路径。
 
 ## 六、验证记录（历史）
+
+**v1.0.21-l（versionCode 35）新增：集成终端的后端证据**
+
+「终端能不能开」此前一直没有证据，而它恰好是最容易在移植上失效的一环：VSCode 的终端不是用 JavaScript 模拟的，它靠 `node-pty` 这个原生模块向内核要真实 PTY。ABI 不匹配、`/dev/ptmx` 不可用、glibc 版本不对，任何一条都会让终端面板一开就报错。
+
+直接对随包发布的那棵树做实测（用的是包里那份 `node` 与 `node_modules/node-pty`，不是另装的）：
+
+- `node-pty.spawn` 成功，输出 `PTY_OK`、`tty` 返回 `/dev/pts/0`、`id -u` 为 0、退出码 0——即原生模块能真正分配 PTY 并双向收数据，不是只 `require` 成功。
+- 设备侧的对应条件已满足：PRoot 把 Android 的 `/dev` 绑进 guest，`/dev/ptmx` 与 `/dev/pts` 都在其中；guest 的 `bash` 与 `sh` 均带可执行位（`test_extract.sh` 的断言之一）。
+
+仍未证明的：终端在**无头浏览器以外的真实渲染**（xterm.js 在 GeckoView 里的字体、输入法、滚动）。这一层只能真机看。
 
 **v1.0.18-l（versionCode 32）的离线端到端验证**
 

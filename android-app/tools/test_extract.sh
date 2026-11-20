@@ -92,6 +92,24 @@ fi
 if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 1290 ]; then ok "rootfs entry count is 1290"; else bad "rootfs entry count drifted"; fi
 if [ "$(find "$W/v" -mindepth 1 | wc -l)" -eq 4713 ]; then ok "vscode entry count is 4713"; else bad "vscode entry count drifted"; fi
 
+# 3f. The integrated terminal is not simulated: it asks node-pty, a native module,
+#     for a real PTY. An ABI or glibc mismatch there makes the terminal panel fail
+#     the moment it is opened, so spawn one from the shipped tree and require both
+#     a PTY device and shell output back. Loading the module is not enough - the
+#     failure mode is inside pty.spawn().
+ptyout="$(cd "$W/v/vscode" && LANG=C.UTF-8 LC_ALL=C.UTF-8 timeout 60 ./node -e '
+const p=require("./node_modules/node-pty");
+const t=p.spawn("/bin/sh",["-c","tty; echo PTY_OK"],{name:"xterm-color",cols:80,rows:24,cwd:process.cwd(),env:process.env});
+let o="";
+t.onData(function(d){o+=d});
+t.onExit(function(){console.log(o);process.exit(0)});
+setTimeout(function(){console.log(o);process.exit(2)},20000);
+' 2>/dev/null || echo FAILED)"
+case "$ptyout" in
+  *"/dev/pts/"*"PTY_OK"*) ok "node-pty allocates a real PTY and returns shell output" ;;
+  *) bad "node-pty did not produce a PTY ($(echo "$ptyout" | tr '\n' ' ' | cut -c1-80))" ;;
+esac
+
 # 4. the exact entry that used to abort must be a working absolute symlink.
 #    Its own extraction dir is needed: $W/a holds the last tarball of the loop.
 rm -rf "$W/c"; mkdir -p "$W/c"
