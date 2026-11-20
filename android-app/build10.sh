@@ -140,10 +140,18 @@ done
 echo "manifest clean, crash handler present, ${#DEPJARS[@]} dependency + ${#KOTLIN_JARS[@]} kotlin + ${#EXTRA_JARS[@]} extra jars present"
 
 rm -rf "$B"
-mkdir -p "$B/flat" "$B/gen" "$B/classes" "$B/dex" "$B/src" "$OUT"
+rm -rf "$B/flat" "$B/flat.zip"
+mkdir -p "$B/gen" "$B/classes" "$B/dex" "$B/src" "$OUT"
 
 echo "== 1/6 aapt2 compile =="
-aapt2_retry compile --dir "$APP_DIR/src/main/res" -o "$B/flat/"
+# Compile to a single zip container per resource set instead of a directory of
+# one flat per resource file. aapt2 link takes such zips as positional inputs,
+# and this is what keeps the argument count small: PRoot's stub loader aborts a
+# child exec with "[proroot-stub-loader] stack build failed =7" (exit 125) once
+# the child gets 256 positional arguments. One flat per file meant 256+ inputs
+# (app res 2 + libraries 348) and every build died right there; one zip per
+# resource set means 18 inputs, with no resources excluded.
+aapt2_retry compile --dir "$APP_DIR/src/main/res" -o "$B/flat.zip"
 
 # Library resources + library R classes.
 #
@@ -184,22 +192,26 @@ for pair in "${LIBAARS[@]}"; do
   pkg="${pair##*|}"
   [ -s "$aar" ] || { echo "FATAL: library aar missing: $aar"; exit 1; }
   d="$B/libres/$LIDX"
-  mkdir -p "$d" "$B/flatlib/$LIDX"
+  mkdir -p "$d"
   unzip -o -q "$aar" 'res/*' -d "$d" || true
   if [ -d "$d/res" ]; then
-    aapt2_retry compile --dir "$d/res" -o "$B/flatlib/$LIDX/"
+    aapt2_retry compile --dir "$d/res" -o "$B/flatlib/$LIDX.zip"
+  else
+    : > "$B/flatlib/$LIDX.zip"
   fi
   EXTRAPKGS+=("$pkg")
   LIDX=$((LIDX + 1))
 done
 echo "library packages: ${#EXTRAPKGS[@]}"
 
-echo "== 2/6 aapt2 link (L, vc 24) =="
-# This environment's PRoot stub loader intermittently aborts a child exec with
-# "[proroot-stub-loader] stack build failed =7" (exit 125). The very same command
-# succeeds on retry, and it is not argv size or memory: a 256-input link failed
-# three times in a row inside this script while the identical command run by hand
-# went through. Retry the link a few times instead of losing a whole build.
+echo "== 2/6 aapt2 link (L, vc 28, 1.0.14-l) =="
+LINK_INPUTS=("$B/flat.zip")
+for z in "$B/flatlib"/*.zip; do [ -s "$z" ] && LINK_INPUTS+=("$z"); done
+echo "  link inputs: ${#LINK_INPUTS[@]} zip containers"
+if [ "${#LINK_INPUTS[@]}" -gt 240 ]; then
+  echo "FATAL: ${#LINK_INPUTS[@]} link inputs is too close to the 255 cap"
+  exit 1
+fi
 LINK_TRY=0
 while :; do
 LINK_TRY=$((LINK_TRY + 1))
@@ -212,7 +224,7 @@ set +e
   --min-sdk-version 26 --target-sdk-version 28 \
   --version-code 28 --version-name "1.0.14-l" \
   --auto-add-overlay \
-  "$B/flat"/*.flat "$B/flatlib"/*/*.flat
+  "${LINK_INPUTS[@]}"
 LINK_RC=$?
 set -e
 if [ "$LINK_RC" -eq 0 ] && [ -s "$B/baseL.apk" ]; then

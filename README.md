@@ -17,7 +17,7 @@
 
 > 真机进度（Xiaomi / Android 17 / SDK 37）：安装成功 → 启动**不再闪退** → GeckoView 起 `sandboxed_tab` 内容进程 → 运行时解包完成 → `libproot.so`+`node` 起 `serve-web` → `127.0.0.1:8800` 处于 LISTEN 且已有 GeckoView 连接。剩余一项待肉眼确认：工作台是否完整渲染（设备识屏关闭，无法读屏自证）。验收清单见 `docs/README.md` 第七节。
 
-> **当前进度（未完成）**：你上次要的三处结构性改动已经落到代码里——主界面不再有顶部工具条（原来那排 `‹ › ↻ ⌂ ⚙` 在窄屏上吃掉约 40dp，也是"界面错位/显示不全"的一部分原因），改成沉浸式全屏 + 右上角 32% 透明度的齿轮热区；设置搬到独立的 `SettingsActivity`（地址、重启服务、清除运行时重解包、版本信息）；服务启动不再传 `--default-folder`，因此会像全新安装那样先给欢迎页。这三处已通过 javac（30 个 class），**但还没能打成新的 APK**：本环境的 PRoot stub loader 在 `build10.sh` 里执行 `aapt2 link` 时必挂 `stack build failed =7`（退出码 125），而同一条命令在交互 shell 里重放又是好的，已排除参数、内存、路径、环境变量、fd 上限等原因，详见 `docs/known-issues.md` 第 24 条。线上 `v1.0.14-l` 资产未受影响，仍是上一版已验证产物。
+> **当前进度**：上次你点出的四处结构性问题已经改完并**打出新包**（`dist/vscode-mobile-L.apk`，206,490,059 字节，md5 `bd491ddaa4cc835b044f191b47da6e36`）：主界面去掉顶部工具条改沉浸式全屏（那排 `‹ › ↻ ⌂ ⚙` 在窄屏吃掉约 40dp，也是"界面错位/显示不全"的一部分），设置搬到独立的 `SettingsActivity`，服务不再传 `--default-folder` 所以会先给欢迎页。构建链原先卡死的 `aapt2 link` 已定位为 PRoot 对子进程位置参数的 255 个硬上限，改用 zip 容器后 link 输入从 350 降到 17，`tools/verify_apk.sh` 30 项全过（`VERIFY_OK`）。**仍未真机验证**：装上并肉眼确认欢迎页、全屏、设置页，需要在 设置 → 设备能力授权 里重新开启无障碍（当前 `enabled_accessibility_services` 为空）。
 
 > 关于「直接用正常的 Linux 版 VS Code」：已在同架构同 glibc 的 Ubuntu 容器里实测**桌面版 Electron VS Code**（1.146.0 arm64 deb）——窗口能建，但 GPU 子进程 `exit_code=4`（SIGILL）两次后 Chromium 直接 `GPU process isn't usable. Goodbye`；改成 `--in-process-gpu` 则主进程自身收到 `Illegal instruction`。这是 proot 的 syscall 转发与 Chromium GPU 初始化路径不兼容，**桌面版走不通**，而 `serve-web`（纯 Node）在同环境完全正常。故本项目采用「Node 服务 + 客户端渲染」，与官方 `code-server` 同构。详见 `docs/known-issues.md` 第 22 条。
 
