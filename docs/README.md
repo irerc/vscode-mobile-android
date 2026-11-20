@@ -61,7 +61,7 @@
 | 编辑器（语法高亮 / 多光标 / 查找替换） | ✅ | Monaco，桌面级 |
 | 文件资源管理器、新建/重命名/删除 | ✅ | 走 rootfs 内真实文件系统，默认工作区 `/root/workspace` |
 | 集成终端 | ✅ | rootfs 内 `/bin/bash`，可运行 Linux 命令 |
-| 源代码管理（Git） | ⚠️ | rootfs 未预装 git：需在终端内联网 `apt install git` 后配置凭据，离线状态下不可用 |
+| 源代码管理（Git） | ✅ | 1.0.22-l 起 rootfs 内预装 git 2.34.1 与完整依赖闭包（含 perl），用 guest 自己的 glibc 实跑过 `init/add/commit/log`；凭据仍需你自己配 |
 | 扩展市场 | ✅ | 联网时从 Marketplace / Open VSX 安装 |
 | 调试（Node/Python 等） | ✅ | 依赖对应 debug adapter，由扩展提供 |
 | 任务 / 输出 / 问题面板 | ✅ | — |
@@ -87,7 +87,7 @@ bash android-app/build10.sh             # 产物 dist/vscode-mobile-L.apk
 
 | 文件 | 大小 | 内容 |
 |---|---|---|
-| `rootfs.tar.gz` | 20,955,828 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh） |
+| `rootfs.tar.gz` | 44,258,777 B | Ubuntu 22.04.5 arm64 精简根（glibc 2.35、libstdc++ 6.0.30、bash、CA 证书、resolv.conf、bootstrap.sh、**git 2.34.1 与 19 个依赖含 perl**） |
 | `vscode.tar.gz` | 88,452,362 B | 裁剪后的 serve-web 树（node、node_modules、94 个内置扩展、out） |
 | `usr.tar.gz` | 136,008 B | PRoot 备用副本（实际运行走 nativeLibraryDir） |
 | `omni.ja` | 15,141,515 B | GeckoView 资源包 |

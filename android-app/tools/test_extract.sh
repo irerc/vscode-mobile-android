@@ -89,7 +89,7 @@ fi
 # 3e. Pin the exact entry counts so a repack that loses files is caught rather
 #     than absorbed by the tolerance above. GNU tar reports one fewer for rootfs
 #     because it keeps the hardlink as a link, not a second file.
-if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 1290 ]; then ok "rootfs entry count is 1290"; else bad "rootfs entry count drifted"; fi
+if [ "$(find "$W/h" -mindepth 1 | wc -l)" -eq 5074 ]; then ok "rootfs entry count is 5074"; else bad "rootfs entry count drifted"; fi
 if [ "$(find "$W/v" -mindepth 1 | wc -l)" -eq 4713 ]; then ok "vscode entry count is 4713"; else bad "vscode entry count drifted"; fi
 
 # 3f. The integrated terminal is not simulated: it asks node-pty, a native module,
@@ -109,6 +109,21 @@ case "$ptyout" in
   *"/dev/pts/"*"PTY_OK"*) ok "node-pty allocates a real PTY and returns shell output" ;;
   *) bad "node-pty did not produce a PTY ($(echo "$ptyout" | tr '\n' ' ' | cut -c1-80))" ;;
 esac
+
+# 3g. Source control is the one headline feature that used to need a manual
+#     `apt install git` inside the guest. The rootfs now carries git and its
+#     dependency closure, so prove it runs out of the tree that the app's own
+#     extractor produced - not out of a tree this script unpacked with tar, which
+#     would leave the Java extractor's handling of ~3800 new entries untested.
+if [ -x "$W/h/usr/bin/git" ]; then
+  gv="$(cd "$W/h" && timeout 120 ./lib/ld-linux-aarch64.so.1 --library-path ./lib/aarch64-linux-gnu:./usr/lib/aarch64-linux-gnu ./usr/bin/git --version 2>/dev/null)"
+  case "$gv" in
+    "git version "*) ok "guest git runs from the extracted tree ($gv)" ;;
+    *) bad "guest git did not run ($(echo "$gv" | head -c 60))" ;;
+  esac
+else
+  bad "usr/bin/git missing from the rootfs payload"
+fi
 
 # 4. the exact entry that used to abort must be a working absolute symlink.
 #    Its own extraction dir is needed: $W/a holds the last tarball of the loop.
