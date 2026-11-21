@@ -722,24 +722,42 @@ public class MainActivity extends Activity {
         return reply;
     }
 
-    private void finishFilePrompt(Uri[] uris) {
-        GeckoSession.PromptDelegate.FilePrompt prompt = filePrompt;
-        GeckoResult<GeckoSession.PromptDelegate.PromptResponse> reply = filePromptResult;
+    private void finishFilePrompt(final Uri[] uris) {
+        final GeckoSession.PromptDelegate.FilePrompt prompt = filePrompt;
+        final GeckoResult<GeckoSession.PromptDelegate.PromptResponse> reply = filePromptResult;
         filePrompt = null;
         filePromptResult = null;
         if (prompt == null || reply == null) {
             return;
         }
-        GeckoSession.PromptDelegate.PromptResponse response;
-        try {
-            response = (uris != null && uris.length > 0)
-                    ? prompt.confirm(this, uris)
-                    : prompt.dismiss();
-        } catch (Throwable t) {
-            Log.w(TAG, "file prompt failed, dismissing: " + t);
-            response = prompt.dismiss();
+        if (uris == null || uris.length == 0) {
+            reply.complete(prompt.dismiss());
+            return;
         }
-        reply.complete(response);
+        // confirm() reads the picked file into the request synchronously, so a large
+        // VSIX would block the main thread for as long as the read takes and freeze
+        // the page - the same "the button did nothing" symptom this delegate exists
+        // to remove. Do it off the UI thread; GeckoResult may be completed from any.
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                GeckoSession.PromptDelegate.PromptResponse response;
+                try {
+                    response = prompt.confirm(MainActivity.this, uris);
+                } catch (Throwable t2) {
+                    Log.w(TAG, "file prompt failed, dismissing: " + t2);
+                    try {
+                        response = prompt.dismiss();
+                    } catch (Throwable ignored) {
+                        reply.completeExceptionally(ignored);
+                        return;
+                    }
+                }
+                reply.complete(response);
+            }
+        }, "fileprompt-confirm");
+        t.setDaemon(true);
+        t.start();
     }
 
     @Override

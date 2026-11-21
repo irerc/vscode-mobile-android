@@ -41,8 +41,8 @@
 | 文件监听（外部改动自动刷新） | 可用 | inotify 经 PRoot 透传 |
 | 时间线 / 本地历史 | 可用 | 存放在 `~/.vscode-server` |
 | 符号链接与权限位 | 可用 | 受 Android 存储权限约束，挂载与权限见上一行 |
-| 网页端选择本地文件（如「从 VSIX 安装」、网页内打开文件） | 1.0.24-l 起可用 | 此前没有 `PromptDelegate`，GeckoView 直接把请求丢掉，按钮点了没反应。现在转成 Android 文档选择器，支持单选/多选，取消与无选择器都按 dismiss 回填，页面不会卡在等待 |
-| 网页端下载（导出配置、下载扩展包等） | 1.0.24-l 起可用 | 此前没有 `ContentDelegate.onExternalResponse`，响应被静默丢弃。现在流式写入 `Download/`（不可写则退到应用外部目录，再退到内部目录），文件名优先取 `Content-Disposition`，重名自动追加 `-2`，完成与失败都有 Toast |
+| 网页端选择本地文件（如「从 VSIX 安装」、网页内打开文件） | 1.0.24-l 起可用（1.0.27-l 起不卡 UI） | 此前没有 `PromptDelegate`，GeckoView 直接把请求丢掉，按钮点了没反应。现在转成 Android 文档选择器，支持单选/多选，取消与无选择器都按 dismiss 回填，页面不会卡在等待。1.0.27-l 把 `confirm()` 移出主线程——它在调用线程把文件读进请求，百 MB 的扩展包会冻住界面 |
+| 网页端下载（导出配置、下载扩展包等） | 1.0.24-l 起可用（1.0.26-l 起命名逻辑有实测） | 此前没有 `ContentDelegate.onExternalResponse`，响应被静默丢弃。现在流式写入 `Download/`（不可写则退到应用外部目录，再退到内部目录），文件名优先取 `Content-Disposition`，重名自动追加 `-2`，完成与失败都有 Toast。命名与去重逻辑抽到 `Downloads` 类，由 `tools/test_downloads.sh` 在 JVM 上跑 21 条断言 |
 
 ## 三、终端与任务
 
