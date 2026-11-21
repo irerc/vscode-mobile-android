@@ -67,7 +67,7 @@
 | 工具层字符处理 | 写入含 `` `&` 或完整 URL 字面量的文本会被截断，Java 源码统一用占位符脚本生成 |
 | 容器 seccomp | `chroot` 仅首次可用，之后 `Function not implemented`；改用 loader 直跑 |
 | 依赖校验 | jar 必须验证确实含 `.class`（`unzip -Z1 x.jar | grep -c "\.class$"`），0 个即为 metadata-only 包，不能喂给 d8 |
-| 36 | 容器里的 APK 送不到手机上，而装它必须有人点一下 | 目标要求「干净设备即装即用」，但开发侧的每一条传送通道都装不下 243 MB：`/app/export` 直接返回 `TOO_LARGE: 243599819`；SAF 的 `push` 上限 32 MiB 且先要有用户授权过的目录（当前 `trees` 为空）；微信通道上限 20 MiB（实测回 `limit 20971520`）；设备 shell 能写 `Download/` 但无法从容器接收字节，且管道与重定向被策略拦截，分块拼装无从落地 | **结论**：安装只能由用户在手机上下载 release 资产再点安装，没有自动化路径。已核对设备现状（2026-11-21）：装机为 1.0.12-l / versionCode 26，`Android/data/` 下的应用目录只有 11-14 那次的 `Download/` 与 `crash.log`，`selftest.txt` 从未生成——即 1.0.13 之后的所有修复都还没在任何设备上跑过。这条不写「待修」，因为不是代码问题；它是「离完成还差什么」的答案 |
+| 36 | 容器里的 APK 送不到手机上，而装它必须有人点一下 | 目标要求「干净设备即装即用」，但开发侧每条传送通道都装不下约 243 MB：`/app/export` 回 `TOO_LARGE: 243599819`；SAF `push` 上限 32 MiB 且当前 `trees` 为空；微信通道上限 20 MiB（实测 `limit 20971520`）；设备 shell 能写 `Download/` 却收不到容器字节，管道与重定向又被策略拦截，分块拼装无处落地。2026-11-22 补充实测：`/app/open` 把 release 资产直链交给 Edge 后下载确实开始（197.28/243.60 MB，约 8 MB/s），但一换前台即中断，重开时新标签在后台不触发下载 | **结论**：这一步只能由用户在手机上前台完成，没有自动化路径。旁证：设备 `Download/vscode-mobile-L.apk`（206,485,963 B，11-14 05:33）说明当初 1.0.12-l 正是这么装的。已核对设备现状：装机为 1.0.12-l / versionCode 26，`Android/data/` 下只有那次的 `Download/` 与 `crash.log`，`selftest.txt` 从未生成——1.0.13 之后的所有修复都还没在任何设备上跑过。另注：设备常处在用户实际使用中（当晚屏幕为 Qoder 登录页），抢前台不合适 |
 
 - **git 推送通道**：曾经只能走本地 CONNECT 代理（`gh-proxy.mjs`，`-c http.proxy=http://127.0.0.1:7891` +  `-c http.version=HTTP/1.1`），代理会间歇返回 502 / `GnuTLS recv error (-110)` / `Proxy CONNECT aborted`。2026-11-15 实测**直连 `api.github.com` 与 `github.com` 已可用**（HTTP 200，`git push` 成功 `b69d2e2..2747d4e`），代理不再是必需项。代理也不总是可靠：若再遇 502，先试直连，再考虑重启代理。
 
